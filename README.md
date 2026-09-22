@@ -1,12 +1,6 @@
-```
- ██████╗██╗  ████████╗
-██╔════╝██║  ╚══██╔══╝
-██║     ██║     ██║
-██║     ██║     ██║
-╚██████╗███████╗██║
- ╚═════╝╚══════╝╚═╝
-  command line tools
-```
+<p align="center">
+  <img src="img/clt_command_line_tools_logo.svg" alt="CLT - Command Line Tools" width="400"/>
+</p>
 
 > A personal collection of terminal-based tools built in Python — each one solving a specific everyday task directly from the command line, with no GUI required.
 
