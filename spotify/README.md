@@ -4,18 +4,43 @@ Command line tool to list and play your most played Spotify tracks locally via s
 
 ## First-time setup
 
-### 1. Authenticate spotifyd (once)
+### 1. Clone the repo
 
 ```bash
-~/felix/misc_projects/spotify/spotifyd authenticate --cache-path ~/.cache/spotifyd
+git clone https://github.com/fvgm-spec/clt.git
+cd clt/spotify
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Set up credentials
+
+Create a `.env` file in the `spotify/` directory:
+
+```
+CLIENT_ID=your_spotify_client_id
+CLIENT_SECRET=your_spotify_client_secret
+REDIRECT_URI=http://127.0.0.1:8000/callback
+```
+
+Get your credentials from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+
+### 4. Authenticate spotifyd (once)
+
+```bash
+./spotifyd authenticate --cache-path ~/.cache/spotifyd
 ```
 
 This opens a browser, you log in with your Spotify account, and credentials are cached at `~/.cache/spotifyd`. You only need to do this once.
 
-### 2. Authenticate the API client (once)
+### 5. Authenticate the API client (once)
 
 ```bash
-python3 ~/felix/misc_projects/spotify/spoty.py
+python3 spoty.py
 ```
 
 On first run this opens a browser for OAuth. After approving, the token is saved to `.token.json` and reused automatically on all future runs.
@@ -26,16 +51,16 @@ On first run this opens a browser for OAuth. After approving, the token is saved
 
 ```bash
 # List your top 10 tracks (last 6 months)
-python3 ~/felix/misc_projects/spotify/spoty.py
+python3 spoty.py
 
 # List + play full tracks
-python3 ~/felix/misc_projects/spotify/spoty.py --play
+python3 spoty.py --play
 
 # Top 20, all-time, with playback
-python3 ~/felix/misc_projects/spotify/spoty.py --play --limit 20 --range long_term
+python3 spoty.py --play --limit 20 --range long_term
 
 # Last 4 weeks
-python3 ~/felix/misc_projects/spotify/spoty.py --play --range short_term
+python3 spoty.py --play --range short_term
 ```
 
 ### Search & play a specific track
@@ -44,32 +69,32 @@ Pass any free-text query as a positional argument — partial song name, partial
 
 ```bash
 # partial song name
-python3 ~/felix/misc_projects/spotify/spoty.py "cochise"
+python3 spoty.py "cochise"
 
 # partial artist name
-python3 ~/felix/misc_projects/spotify/spoty.py "audioslave"
+python3 spoty.py "audioslave"
 
 # mixed artist + track
-python3 ~/felix/misc_projects/spotify/spoty.py "rusty soundgarden"
+python3 spoty.py "rusty soundgarden"
 
 # search + play immediately
-python3 ~/felix/misc_projects/spotify/spoty.py "cochise" --play
+python3 spoty.py "cochise" --play
 
 # search top 3 results + play
-python3 ~/felix/misc_projects/spotify/spoty.py "garbage" --limit 3 --play
+python3 spoty.py "garbage" --limit 3 --play
 
 # search + shuffle results + play
-python3 ~/felix/misc_projects/spotify/spoty.py "soundgarden" --limit 5 --play --shuffle
+python3 spoty.py "soundgarden" --limit 5 --play --shuffle
 ```
 
 ### Filter top tracks by artist
 
 ```bash
 # only show/play your top tracks from a specific artist
-python3 ~/felix/misc_projects/spotify/spoty.py --artist "audioslave" --play
+python3 spoty.py --artist "audioslave" --play
 
 # combine with shuffle and range
-python3 ~/felix/misc_projects/spotify/spoty.py --artist "depeche" --range long_term --shuffle --play
+python3 spoty.py --artist "depeche" --range long_term --shuffle --play
 ```
 
 ### Autoplay / continuous playback
@@ -100,7 +125,7 @@ When the last track in your queue finishes, Spotify automatically continues play
 |------|-------------|
 | `spoty.py` | Main CLI script |
 | `spotifyd` | Local spotifyd binary (v0.4.2) |
-| `.env` | Spotify app credentials (Client ID / Secret) |
-| `.token.json` | Cached OAuth token (auto-managed) |
+| `.env` | Spotify app credentials (Client ID / Secret) — not committed |
+| `.token.json` | Cached OAuth token (auto-managed) — not committed |
 | `~/.config/spotifyd/spotifyd.conf` | spotifyd config (audio backend, device name) |
 | `~/.cache/spotifyd` | spotifyd cached credentials |
