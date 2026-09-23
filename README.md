@@ -4,6 +4,12 @@
 
 > A personal collection of terminal-based tools built in Python — each one solving a specific everyday task directly from the command line, with no GUI required.
 
+<p align="center">
+  <a href="https://buymeacoffee.com/fvgm">
+    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"/>
+  </a>
+</p>
+
 ---
 
 ## 🛠 Tools
