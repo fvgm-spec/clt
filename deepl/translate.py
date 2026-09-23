@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Usage: python3 translate.py "text to translate" [TARGET_LANG] [SOURCE_LANG]
-Default target: EN-US. Example: python3 translate.py "Hola mundo" EN-US ES"""
+"""Usage: python3 translate.py "text" [target_lang] [source_lang]
+Auto-detects source language. Defaults: EN→ES, other→EN-US."""
 import sys, os, deepl
 from dotenv import load_dotenv
 
@@ -11,8 +11,16 @@ if not args:
     sys.exit("Usage: translate.py <text> [target_lang] [source_lang]")
 
 text   = args[0]
-target = args[1] if len(args) > 1 else "EN-US"
 source = args[2] if len(args) > 2 else None
+translator = deepl.Translator(os.environ["DEEPL_API_KEY"])
 
-result = deepl.Translator(os.environ["DEEPL_API_KEY"]).translate_text(text, target_lang=target, source_lang=source)
+if len(args) > 1:
+    target = args[1]
+else:
+    # detect source first to pick a sensible default target
+    detected = translator.translate_text(text, target_lang="ES", source_lang=source).detected_source_lang
+    target = "ES" if detected.startswith("EN") else "EN-US"
+    source = detected
+
+result = translator.translate_text(text, target_lang=target, source_lang=source)
 print(f"[{result.detected_source_lang} → {target}] {result.text}")
