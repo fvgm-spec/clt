@@ -1,0 +1,138 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r deepl/requirements.txt
+          pip install -r spotify/requirements.txt
+          pip install -r espn-results-cli/requirements.txt
+          pip install aws-sam-cli pytest
+
+      - name: Run tests
+        run: python -m pytest tests/ -v
+
+      - name: SAM build
+        run: sam build --template template.yaml --build-dir .aws-sam/build
+
+      - name: SAM package
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          sam package \
+            --template-file .aws-sam/build/template.yaml \
+            --output-template-file packaged.yaml \
+            --s3-bucket cicd-pipeline-artifacts-dev-942709712049 \
+            --s3-prefix sam-packages
+
+      - name: Upload packaged template
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-template
+          path: packaged.yaml
+
+  deploy-staging:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Download packaged template
+        uses: actions/download-artifact@v4
+        with:
+          name: packaged-template
+
+      - name: Resolve SSM parameters
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          DEEPL=$(aws ssm get-parameter --name /clt/deepl/api_key --with-decryption --query Parameter.Value --output text)
+          S_ID=$(aws ssm get-parameter --name /clt/spotify/client_id --with-decryption --query Parameter.Value --output text)
+          S_SECRET=$(aws ssm get-parameter --name /clt/spotify/client_secret --with-decryption --query Parameter.Value --output text)
+          S_URI=$(aws ssm get-parameter --name /clt/spotify/redirect_uri --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$DEEPL"
+          echo "::add-mask::$S_ID"
+          echo "::add-mask::$S_SECRET"
+          echo "DEEPL_API_KEY=$DEEPL" >> $GITHUB_ENV
+          echo "SPOTIFY_CLIENT_ID=$S_ID" >> $GITHUB_ENV
+          echo "SPOTIFY_CLIENT_SECRET=$S_SECRET" >> $GITHUB_ENV
+          echo "SPOTIFY_REDIRECT_URI=$S_URI" >> $GITHUB_ENV
+
+      - name: Deploy to staging
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          aws cloudformation deploy \
+            --template-file packaged.yaml \
+            --stack-name clt-lambdas-staging \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              DeeplApiKey="$DEEPL_API_KEY" \
+              SpotifyClientId="$SPOTIFY_CLIENT_ID" \
+              SpotifyClientSecret="$SPOTIFY_CLIENT_SECRET" \
+              SpotifyRedirectUri="$SPOTIFY_REDIRECT_URI" \
+              Environment=staging
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download packaged template
+        uses: actions/download-artifact@v4
+        with:
+          name: packaged-template
+
+      - name: Resolve SSM parameters
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          DEEPL=$(aws ssm get-parameter --name /clt/deepl/api_key --with-decryption --query Parameter.Value --output text)
+          S_ID=$(aws ssm get-parameter --name /clt/spotify/client_id --with-decryption --query Parameter.Value --output text)
+          S_SECRET=$(aws ssm get-parameter --name /clt/spotify/client_secret --with-decryption --query Parameter.Value --output text)
+          S_URI=$(aws ssm get-parameter --name /clt/spotify/redirect_uri --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$DEEPL"
+          echo "::add-mask::$S_ID"
+          echo "::add-mask::$S_SECRET"
+          echo "DEEPL_API_KEY=$DEEPL" >> $GITHUB_ENV
+          echo "SPOTIFY_CLIENT_ID=$S_ID" >> $GITHUB_ENV
+          echo "SPOTIFY_CLIENT_SECRET=$S_SECRET" >> $GITHUB_ENV
+          echo "SPOTIFY_REDIRECT_URI=$S_URI" >> $GITHUB_ENV
+
+      - name: Deploy to production
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          aws cloudformation deploy \
+            --template-file packaged.yaml \
+            --stack-name clt-lambdas-production \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              DeeplApiKey="$DEEPL_API_KEY" \
+              SpotifyClientId="$SPOTIFY_CLIENT_ID" \
+              SpotifyClientSecret="$SPOTIFY_CLIENT_SECRET" \
+              SpotifyRedirectUri="$SPOTIFY_REDIRECT_URI" \
+              Environment=production

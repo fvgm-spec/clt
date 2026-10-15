@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CLT Lambda functions - ESPN, DeepL, Spotify
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 30
+
+Parameters:
+  DeeplApiKey:
+    Type: String
+    NoEcho: true
+  SpotifyClientId:
+    Type: String
+    NoEcho: true
+  SpotifyClientSecret:
+    Type: String
+    NoEcho: true
+  SpotifyRedirectUri:
+    Type: String
+  Environment:
+    Type: String
+    Default: staging
+
+Resources:
+
+  EspnFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "clt-espn-results-${Environment}"
+      CodeUri: espn-results-cli/
+      Handler: lambda_handler.lambda_handler
+
+  DeeplFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "clt-deepl-translator-${Environment}"
+      CodeUri: deepl/
+      Handler: lambda_handler.lambda_handler
+      Environment:
+        Variables:
+          DEEPL_API_KEY: !Ref DeeplApiKey
+
+  SpotifyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "clt-spotify-${Environment}"
+      CodeUri: spotify/
+      Handler: lambda_handler.lambda_handler
+      Environment:
+        Variables:
+          CLIENT_ID: !Ref SpotifyClientId
+          CLIENT_SECRET: !Ref SpotifyClientSecret
+          REDIRECT_URI: !Ref SpotifyRedirectUri
