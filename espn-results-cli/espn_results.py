@@ -13,6 +13,8 @@ from zoneinfo import ZoneInfo
 
 BASE_URL       = "https://www.espn.com.uy/futbol/resultados/_/fecha/{date}"
 STANDINGS_URL  = "https://www.espn.com.uy/futbol/posiciones/_/liga/{league}"
+PLAYER_BIO_URL = "https://www.espn.com.uy/futbol/jugador/bio/_/id/{id}/{slug}"
+SEARCH_API_URL = "https://site.web.api.espn.com/apis/common/v3/search?query={query}&type={type}&sport=soccer&limit=5"
 STATE_MARKER   = "window['__espnfitt__']="
 DISPLAY_TIMEZONE = ZoneInfo("Europe/Madrid")
 
@@ -283,28 +285,99 @@ def fetch_html_url(url):
         raise RuntimeError(f"Could not fetch {url}: {exc.reason}") from exc
 
 
+def search_espn(query, result_type="team"):
+    import urllib.parse
+    url = SEARCH_API_URL.format(query=urllib.parse.quote(query), type=result_type)
+    req = Request(url, headers={"User-Agent": "espn-results-cli/0.1", "Accept": "application/json"})
+    try:
+        return json.loads(urlopen(req, timeout=20).read()).get("items", [])
+    except Exception as exc:
+        raise RuntimeError(f"Search failed: {exc}") from exc
+
+
+def find_team_tier(team_query):
+    items = search_espn(team_query, "team")
+    if not items:
+        print(f"No team found for '{team_query}'.")
+        return
+
+    LEAGUE_NAMES = {
+        "eng.1": "Premier League (1st tier)",  "eng.2": "Championship (2nd tier)",
+        "eng.3": "League One (3rd tier)",       "eng.4": "League Two (4th tier)",
+        "esp.1": "La Liga (1st tier)",          "esp.2": "La Liga 2 (2nd tier)",
+        "ger.1": "Bundesliga (1st tier)",       "ger.2": "2. Bundesliga (2nd tier)",
+        "ita.1": "Serie A (1st tier)",          "ita.2": "Serie B (2nd tier)",
+        "fra.1": "Ligue 1 (1st tier)",          "fra.2": "Ligue 2 (2nd tier)",
+        "arg.1": "Primera División Argentina",  "chi.1": "Primera División Chile",
+        "col.1": "Primera A Colombia",          "per.1": "Liga 1 Perú",
+        "UEFA.Champions_League": "UEFA Champions League",
+        "UEFA.Europa_League": "UEFA Europa League",
+    }
+
+    for item in items[:3]:
+        slug = item.get("defaultLeagueSlug", "")
+        league = LEAGUE_NAMES.get(slug, slug or "Unknown")
+        print(f"{item['displayName']}  →  {league}")
+        print(f"  ESPN: {item.get('links', [{}])[0].get('href', '')}")
+
+
+def find_player(player_query):
+    items = search_espn(player_query, "player")
+    if not items:
+        print(f"No player found for '{player_query}'.")
+        return
+
+    player = items[0]
+    pid    = player["id"]
+    slug   = re.sub(r"[^a-z0-9]+", "-", player["displayName"].lower()).strip("-")
+    league = (player.get("leagueRelationships") or [{}])[0]
+    league_name = league.get("displayName", player.get("league", ""))
+
+    # fetch bio page to get current club + career
+    url = PLAYER_BIO_URL.format(id=pid, slug=slug)
+    html, _ = fetch_html_url(url)
+    state = extract_state(html)
+    pdata = state["page"]["content"]["player"]
+    hdr   = pdata.get("plyrHdr", {}).get("ath", {})
+    hist  = pdata.get("hist", [])
+
+    current_club = hdr.get("tm") or player.get("teamName", "N/A")
+    print(f"{player['displayName']}")
+    print(f"  Current club : {current_club}")
+    print(f"  League       : {league_name}")
+    print(f"  Position     : {hdr.get('pos', '')}")
+    print(f"  Nationality  : {hdr.get('ctz', '')}")
+    print()
+
+    if hist:
+        print("Career (clubs):")
+        print("-" * 40)
+        for entry in hist:
+            name = entry.get("nm", "")
+            apps = entry.get("num", "")
+            link = entry.get("href", "")
+            apps_str = f"  ({apps} apps)" if apps else ""
+            print(f"  {name}{apps_str}")
+            if link:
+                print(f"    {link}")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Show ESPN Uruguay soccer results/fixtures or standings."
+        description="Show ESPN Uruguay soccer results, standings, team tier or player info."
     )
     parser.add_argument(
-        "date",
-        nargs="?",
-        type=normalize_date,
-        default=normalize_date(None),
+        "date", nargs="?", type=normalize_date, default=normalize_date(None),
         help="Date to fetch, as YYYYMMDD or YYYY-MM-DD. Defaults to today.",
     )
-    parser.add_argument(
-        "-l",
-        "--league",
-        help="Only show leagues matching this text (results) or league slug/name for standings.",
-    )
-    parser.add_argument(
-        "-s",
-        "--standings",
-        action="store_true",
-        help="Show league standings instead of results. Requires -l with a league name or slug.",
-    )
+    parser.add_argument("-l", "--league",
+        help="Filter by league (results) or league slug/name (standings).")
+    parser.add_argument("-s", "--standings", action="store_true",
+        help="Show league standings. Requires -l.")
+    parser.add_argument("-t", "--team",
+        help="Find which tier/league a club currently plays in.")
+    parser.add_argument("-p", "--player",
+        help="Find current club and full career history for a player.")
     return parser
 
 
@@ -313,7 +386,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        if args.standings:
+        if args.team:
+            find_team_tier(args.team)
+        elif args.player:
+            find_player(args.player)
+        elif args.standings:
             if not args.league:
                 print("error: --standings requires -l <league>", file=sys.stderr)
                 return 1
