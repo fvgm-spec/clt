@@ -72,7 +72,58 @@ Output columns: `J` (played) · `G` (wins) · `E` (draws) · `P` (losses) · `GF
 
 Any other ESPN league slug (e.g. `ger.2`, `por.1`, `mex.1`) can be passed directly to `-l`.
 
-## Sample output
+## Team Tier & Stadium Location
+
+Find which tier/league a club currently plays in, plus its stadium location (coordinates + maps links):
+
+```bash
+python3 espn_results.py -t "leicester city"
+python3 espn_results.py -t "boca juniors"
+python3 espn_results.py -t "barcelona"
+python3 espn_results.py -t "bayern munich"
+```
+
+Sample output:
+```
+Leicester City  →  Championship (2nd tier)
+  Stadium  : King Power Stadium
+  Location : Leicester, United Kingdom
+  Coords   : 52.6203970, -1.1423352
+  Maps     : https://www.openstreetmap.org/?mlat=52.6203970&mlon=-1.1423352&zoom=15
+  GMaps    : https://www.google.com/maps?q=52.6203970,-1.1423352
+```
+
+Location data is sourced from **OpenStreetMap Nominatim** — no API key required.
+
+## Player Lookup
+
+Find a player's current club and full career history:
+
+```bash
+python3 espn_results.py -p "harry kane"
+python3 espn_results.py -p "messi"
+python3 espn_results.py -p "vinicius"
+```
+
+Sample output:
+```
+Harry Kane
+  Current club : Bayern Munich
+  League       : German Bundesliga
+  Position     : Atacante
+  Nationality  : Inglaterra
+
+Career (clubs):
+----------------------------------------
+  Bayern Munich  (4 apps)
+  Tottenham Hotspur  (13 apps)
+  Norwich City  (1 apps)
+  Leicester City  (1 apps)
+  Millwall  (1 apps)
+  Leyton Orient  (1 apps)
+```
+
+
 
 ```
 Standings: Liga Premier
