@@ -11,8 +11,9 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 
-BASE_URL = "https://www.espn.com.uy/futbol/resultados/_/fecha/{date}"
-STATE_MARKER = "window['__espnfitt__']="
+BASE_URL       = "https://www.espn.com.uy/futbol/resultados/_/fecha/{date}"
+STANDINGS_URL  = "https://www.espn.com.uy/futbol/posiciones/_/liga/{league}"
+STATE_MARKER   = "window['__espnfitt__']="
 DISPLAY_TIMEZONE = ZoneInfo("Europe/Madrid")
 
 
@@ -47,6 +48,28 @@ def fetch_html(date):
         raise RuntimeError(f"ESPN returned HTTP {exc.code} for {url}") from exc
     except URLError as exc:
         raise RuntimeError(f"Could not fetch {url}: {exc.reason}") from exc
+
+
+LEAGUE_SLUGS = {
+    "premier":      "eng.1",
+    "premier league": "eng.1",
+    "championship": "eng.2",
+    "laliga":       "esp.1",
+    "la liga":      "esp.1",
+    "bundesliga":   "ger.1",
+    "serie a":      "ita.1",
+    "ligue 1":      "fra.1",
+    "champions":    "UEFA.Champions_League",
+    "champions league": "UEFA.Champions_League",
+    "europa":       "UEFA.Europa_League",
+    "conference":   "UEFA.Europa_Conference_League",
+    "libertadores": "CONMEBOL.Libertadores",
+    "sudamericana": "CONMEBOL.Sudamericana",
+    "primera chile": "chi.1",
+    "primera colombia": "col.1",
+    "primera peru": "per.1",
+    "primera argentina": "arg.1",
+}
 
 
 def extract_state(html):
@@ -211,9 +234,58 @@ def print_scoreboard(scoreboard, date, source_url, league_filter=None):
     print(f"Want the full match center view? Review the day on ESPN: {source_url}")
 
 
+def fetch_standings(league):
+    url = STANDINGS_URL.format(league=league)
+    html, source_url = fetch_html_url(url)
+    state = extract_state(html)
+    try:
+        data = state["page"]["content"]["standings"]
+        headers = data["groups"]["headers"]
+        groups  = data["groups"]["groups"]
+    except KeyError as exc:
+        raise RuntimeError(f"Could not find standings data: {exc}") from exc
+
+    col_keys = list(headers.keys())
+    col_abbr = [headers[k]["a"] for k in col_keys]
+
+    print(f"Standings: {data.get('leagueName', league)}")
+    print(f"{url}\n")
+
+    for group in groups:
+        print(group.get("name", ""))
+        print("-" * 60)
+        # header row
+        print(f"{'#':>3}  {'Team':<28} " + "  ".join(f"{a:>4}" for a in col_abbr[:8]))
+        print("-" * 60)
+        for i, entry in enumerate(group.get("standings", []), 1):
+            team  = entry["team"]["shortDisplayName"]
+            stats = entry.get("stats", [])
+            note  = entry.get("note", {}).get("description", "")
+            row   = "  ".join(f"{(stats[j] if j < len(stats) else ''):>4}" for j in range(8))
+            note_str = f"  [{note}]" if note else ""
+            print(f"{i:>3}  {team:<28} {row}{note_str}")
+        print()
+
+
+def fetch_html_url(url):
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError, URLError
+    request = Request(url, headers={
+        "User-Agent": "espn-results-cli/0.1 (+local personal script)",
+        "Accept": "text/html,application/xhtml+xml",
+    })
+    try:
+        with urlopen(request, timeout=20) as response:
+            return response.read().decode("utf-8"), url
+    except HTTPError as exc:
+        raise RuntimeError(f"ESPN returned HTTP {exc.code} for {url}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Could not fetch {url}: {exc.reason}") from exc
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Show ESPN Uruguay soccer results/fixtures for a given day."
+        description="Show ESPN Uruguay soccer results/fixtures or standings."
     )
     parser.add_argument(
         "date",
@@ -225,7 +297,13 @@ def build_parser():
     parser.add_argument(
         "-l",
         "--league",
-        help="Only show leagues matching this text, for example: premier league, carabao cup, liga europa uefa.",
+        help="Only show leagues matching this text (results) or league slug/name for standings.",
+    )
+    parser.add_argument(
+        "-s",
+        "--standings",
+        action="store_true",
+        help="Show league standings instead of results. Requires -l with a league name or slug.",
     )
     return parser
 
@@ -235,10 +313,17 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        html, source_url = fetch_html(args.date)
-        state = extract_state(html)
-        scoreboard = get_scoreboard(state)
-        print_scoreboard(scoreboard, args.date, source_url, args.league)
+        if args.standings:
+            if not args.league:
+                print("error: --standings requires -l <league>", file=sys.stderr)
+                return 1
+            slug = LEAGUE_SLUGS.get(args.league.lower(), args.league)
+            fetch_standings(slug)
+        else:
+            html, source_url = fetch_html(args.date)
+            state = extract_state(html)
+            scoreboard = get_scoreboard(state)
+            print_scoreboard(scoreboard, args.date, source_url, args.league)
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
