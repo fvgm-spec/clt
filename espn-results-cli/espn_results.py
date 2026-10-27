@@ -295,6 +295,75 @@ def search_espn(query, result_type="team"):
         raise RuntimeError(f"Search failed: {exc}") from exc
 
 
+LEAGUE_COUNTRY = {
+    "eng": "gb", "esp": "es", "ger": "de", "ita": "it", "fra": "fr",
+    "por": "pt", "ned": "nl", "bel": "be", "sco": "gb", "tur": "tr",
+    "arg": "ar", "bra": "br", "chi": "cl", "col": "co", "per": "pe",
+    "uru": "uy", "mex": "mx", "usa": "us",
+}
+
+# OSM uses official stadium names, not club names — map well-known divergences
+STADIUM_ALIASES = {
+    "boca juniors":   "La Bombonera",
+    "river plate":    "Estadio Monumental",
+    "bayern münchen": "Allianz Arena",
+    "fc barcelona":   "Camp Nou",
+    "barcelona":      "Camp Nou",
+    "real madrid":    "Santiago Bernabéu",
+    "juventus":       "Allianz Stadium",
+    "ac milan":       "San Siro",
+    "inter":          "San Siro",
+    "atletico madrid":"Estadio Metropolitano",
+    "borussia dortmund": "Signal Iduna Park",
+    "manchester united": "Old Trafford",
+    "manchester city":   "Etihad Stadium",
+    "arsenal":           "Emirates Stadium",
+    "chelsea":           "Stamford Bridge",
+    "liverpool":         "Anfield",
+    "tottenham hotspur": "Tottenham Hotspur Stadium",
+}
+
+
+def get_team_location(team_name, league_slug=""):
+    """Query Nominatim (OpenStreetMap) for a football club's stadium coordinates."""
+    import urllib.parse, time as _time
+
+    cc = LEAGUE_COUNTRY.get(league_slug.split(".")[0])
+
+    def nominatim(query):
+        params = {"q": query, "format": "json", "limit": 10, "addressdetails": 1}
+        if cc:
+            params["countrycodes"] = cc
+        url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
+        req = Request(url, headers={"User-Agent": "espn-results-cli/0.1"})
+        try:
+            return json.loads(urlopen(req, timeout=10).read())
+        except Exception:
+            return []
+
+    def best(results):
+        for r in results:
+            if any(t in r.get("type", "") for t in ("stadium", "sports", "ground", "pitch", "construction")):
+                return r
+        return results[0] if results else None
+
+    # check alias first
+    alias = STADIUM_ALIASES.get(team_name.lower())
+    if alias:
+        r = best(nominatim(alias))
+        if r:
+            return r
+        _time.sleep(0.5)
+
+    for query in [f"{team_name} stadium", f"{team_name} estadio", f"{team_name} football ground"]:
+        r = best(nominatim(query))
+        if r:
+            return r
+        _time.sleep(0.5)
+
+    return None
+
+
 def find_team_tier(team_query):
     items = search_espn(team_query, "team")
     if not items:
@@ -314,11 +383,26 @@ def find_team_tier(team_query):
         "UEFA.Europa_League": "UEFA Europa League",
     }
 
-    for item in items[:3]:
-        slug = item.get("defaultLeagueSlug", "")
-        league = LEAGUE_NAMES.get(slug, slug or "Unknown")
-        print(f"{item['displayName']}  →  {league}")
-        print(f"  ESPN: {item.get('links', [{}])[0].get('href', '')}")
+    team = items[0]
+    slug = team.get("defaultLeagueSlug", "")
+    league = LEAGUE_NAMES.get(slug, slug or "Unknown")
+    print(f"{team['displayName']}  →  {league}")
+
+    loc = get_team_location(team["displayName"], slug)
+    if loc:
+        addr = loc.get("address", {})
+        city    = (addr.get("city") or addr.get("town") or addr.get("municipality")
+                   or addr.get("county") or addr.get("state", ""))
+        country = addr.get("country", "")
+        lat, lon = loc["lat"], loc["lon"]
+        place   = loc["display_name"].split(",")[0]
+        print(f"  Stadium  : {place}")
+        print(f"  Location : {city}, {country}")
+        print(f"  Coords   : {lat}, {lon}")
+        print(f"  Maps     : https://www.openstreetmap.org/?mlat={lat}&mlon={lon}&zoom=15")
+        print(f"  GMaps    : https://www.google.com/maps?q={lat},{lon}")
+    else:
+        print("  Location : not found")
 
 
 def find_player(player_query):
