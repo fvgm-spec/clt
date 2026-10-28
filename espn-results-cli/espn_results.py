@@ -407,6 +407,16 @@ def find_team_tier(team_query):
         print("  Location : not found")
 
 
+FALLBACK_LEAGUES = {
+    "eng": ["eng.1", "eng.2", "eng.league_cup", "eng.fa_cup"],
+    "esp": ["esp.1", "esp.2", "esp.copa_del_rey"],
+    "ger": ["ger.1", "ger.2", "ger.dfb_pokal"],
+    "ita": ["ita.1", "ita.2", "ita.coppa_italia"],
+    "fra": ["fra.1", "fra.2", "fra.coupe_de_france"],
+    "UEFA": ["UEFA.Champions_League", "UEFA.Europa_League", "UEFA.Europa_Conference_League"],
+}
+
+
 def fetch_json(url):
     req = Request(url, headers={"User-Agent": "espn-results-cli/0.1", "Accept": "application/json"})
     try:
@@ -477,8 +487,31 @@ def find_lineup(team_query, date):
                     break
 
     if not match:
-        print(f"No match found for '{team_name}' on {date} in {league_slug}.")
-        print("Tip: the match may be in a different league. Try -l <league> to specify.")
+        prefix = league_slug.split(".")[0]
+        for fallback in FALLBACK_LEAGUES.get(prefix, []):
+            if fallback == league_slug:
+                continue
+            try:
+                fdata = fetch_json(SCOREBOARD_API_URL.format(league=fallback, date=date))
+                for event in fdata.get("events", []):
+                    for comp in event.get("competitions", []):
+                        for competitor in comp.get("competitors", []):
+                            if str(competitor.get("id")) == team_id or \
+                               normalize_text(competitor.get("team", {}).get("displayName", "")) == normalize_text(team_name):
+                                match = (event, comp)
+                                league_slug = fallback
+                                break
+                        if match:
+                            break
+                    if match:
+                        break
+            except Exception:
+                continue
+            if match:
+                break
+
+    if not match:
+        print(f"No match found for '{team_name}' on {date}.")
         return
 
     event, comp = match
