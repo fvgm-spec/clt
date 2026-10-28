@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 BASE_URL       = "https://www.espn.com.uy/futbol/resultados/_/fecha/{date}"
 STANDINGS_URL  = "https://www.espn.com.uy/futbol/posiciones/_/liga/{league}"
-PLAYER_BIO_URL = "https://www.espn.com.uy/futbol/jugador/bio/_/id/{id}/{slug}"
+PLAYER_BIO_URL = "https://www.espn.com/soccer/player/bio/_/id/{id}/{slug}"
 SEARCH_API_URL = "https://site.web.api.espn.com/apis/common/v3/search?query={query}&type={type}&sport=soccer&limit=5"
 LINEUP_API_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={event_id}"
 SCOREBOARD_API_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date}"
