@@ -418,12 +418,39 @@ FALLBACK_LEAGUES = {
 }
 
 
+import boto3
+from decimal import Decimal
+
+_ddb = boto3.resource("dynamodb", region_name="us-east-1")
+_cache_table = _ddb.Table("espn_cache")
+CACHE_TTL_SECONDS = 3600  # 1 hour
+
+
 def fetch_json(url):
+    import time
+    try:
+        item = _cache_table.get_item(Key={"cache_key": url}).get("Item")
+        if item and int(item["expires_at"]) > int(time.time()):
+            return json.loads(item["data"])
+    except Exception:
+        pass
+
     req = Request(url, headers={"User-Agent": "espn-results-cli/0.1", "Accept": "application/json"})
     try:
-        return json.loads(urlopen(req, timeout=20).read())
+        data = json.loads(urlopen(req, timeout=20).read())
     except Exception as exc:
         raise RuntimeError(f"Could not fetch {url}: {exc}") from exc
+
+    try:
+        _cache_table.put_item(Item={
+            "cache_key": url,
+            "data": json.dumps(data),
+            "expires_at": int(time.time()) + CACHE_TTL_SECONDS,
+        })
+    except Exception:
+        pass
+
+    return data
 
 
 def fetch_team_standing(team_id, league_slug):
