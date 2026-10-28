@@ -72,6 +72,37 @@ Output columns: `J` (played) · `G` (wins) · `E` (draws) · `P` (losses) · `GF
 
 Any other ESPN league slug (e.g. `ger.2`, `por.1`, `mex.1`) can be passed directly to `-l`.
 
+## Lineup
+
+Show the starting XI and bench for a team's match today (or on a given date), including each player's age and nationality:
+
+```bash
+# today's match
+python3 espn_results.py --lineup "AC Milan"
+python3 espn_results.py --lineup "Brentford"
+
+# specific date
+python3 espn_results.py 2026-10-28 --lineup "Juventus"
+```
+
+Sample output:
+```
+Bologna 3 - 2 AC Milan  [Second Half]
+
+AC Milan  [4-2-3-1]
+-------------------
+Starting XI:
+   1  G    Mike Maignan  31y  France
+   5  CD-L  Strahinja Pavlovic  25y  Serbia
+  ...
+Bench:
+  11  SUB  Christian Pulisic ↑  USA
+  10  SUB  Luka Modric ↑  34y  Croatia
+```
+
+- `↓` = subbed off · `↑` = subbed on
+- Automatically searches cups and second divisions (Carabao Cup, FA Cup, Copa del Rey, etc.) when the team has no match in their default league that day.
+
 ## Team Tier & Stadium Location
 
 Find which tier/league a club currently plays in, plus its stadium location (coordinates + maps links):
