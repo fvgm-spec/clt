@@ -15,6 +15,8 @@ BASE_URL       = "https://www.espn.com.uy/futbol/resultados/_/fecha/{date}"
 STANDINGS_URL  = "https://www.espn.com.uy/futbol/posiciones/_/liga/{league}"
 PLAYER_BIO_URL = "https://www.espn.com.uy/futbol/jugador/bio/_/id/{id}/{slug}"
 SEARCH_API_URL = "https://site.web.api.espn.com/apis/common/v3/search?query={query}&type={type}&sport=soccer&limit=5"
+LINEUP_API_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={event_id}"
+SCOREBOARD_API_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date}"
 STATE_MARKER   = "window['__espnfitt__']="
 DISPLAY_TIMEZONE = ZoneInfo("Europe/Madrid")
 
@@ -405,6 +407,136 @@ def find_team_tier(team_query):
         print("  Location : not found")
 
 
+def fetch_json(url):
+    req = Request(url, headers={"User-Agent": "espn-results-cli/0.1", "Accept": "application/json"})
+    try:
+        return json.loads(urlopen(req, timeout=20).read())
+    except Exception as exc:
+        raise RuntimeError(f"Could not fetch {url}: {exc}") from exc
+
+
+_athlete_cache = {}
+
+def fetch_athlete_info(athlete_id, slug):
+    """Fetch age and nationality for a player. Cached to avoid duplicate requests."""
+    if athlete_id in _athlete_cache:
+        return _athlete_cache[athlete_id]
+
+    url = PLAYER_BIO_URL.format(id=athlete_id, slug=slug)
+    try:
+        html, _ = fetch_html_url(url)
+        state = extract_state(html)
+        ath = state["page"]["content"]["player"]["plyrHdr"]["ath"]
+        dob_raw = ath.get("dobRaw") or ath.get("dob", "")
+        age = None
+        if dob_raw:
+            try:
+                # try DD/MM/YYYY first, then YYYY-MM-DD
+                for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                    try:
+                        dob = datetime.strptime(dob_raw[:10], fmt)
+                        today = datetime.now()
+                        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+                        break
+                    except ValueError:
+                        continue
+            except Exception:
+                pass
+        nationality = ath.get("ctz", "")
+        result = (age, nationality)
+    except Exception:
+        result = (None, "")
+
+    _athlete_cache[athlete_id] = result
+    return result
+
+
+def find_lineup(team_query, date):
+    """Find today's match for a team and print both lineups."""
+    items = search_espn(team_query, "team")
+    if not items:
+        print(f"No team found for '{team_query}'.")
+        return
+
+    team = items[0]
+    team_id = str(team["id"])
+    team_name = team["displayName"]
+    league_slug = team.get("defaultLeagueSlug", "eng.1")
+
+    url = SCOREBOARD_API_URL.format(league=league_slug, date=date)
+    data = fetch_json(url)
+    events = data.get("events", [])
+
+    match = None
+    for event in events:
+        for comp in event.get("competitions", []):
+            for competitor in comp.get("competitors", []):
+                if str(competitor.get("id")) == team_id or \
+                   normalize_text(competitor.get("team", {}).get("displayName", "")) == normalize_text(team_name):
+                    match = (event, comp)
+                    break
+
+    if not match:
+        print(f"No match found for '{team_name}' on {date} in {league_slug}.")
+        print("Tip: the match may be in a different league. Try -l <league> to specify.")
+        return
+
+    event, comp = match
+    state = comp.get("status", {}).get("type", {}).get("description", "Unknown")
+    event_id = event["id"]
+
+    summary = fetch_json(LINEUP_API_URL.format(league=league_slug, event_id=event_id))
+
+    competitors = comp.get("competitors", [])
+    home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
+    away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[-1])
+
+    print(f"{away.get('team',{}).get('displayName','Away')} {away.get('score','')} - {home.get('score','')} {home.get('team',{}).get('displayName','Home')}  [{state}]")
+    print()
+
+    rosters = summary.get("rosters", [])
+    if not rosters:
+        print("Lineup data not available yet (match may not have started).")
+        return
+
+    for roster in rosters:
+        side_name = roster.get("team", {}).get("displayName", "Team")
+        formation = roster.get("formation", "") if isinstance(roster.get("formation"), str) else (roster.get("formation") or {}).get("name", "")
+        header = f"{side_name}" + (f"  [{formation}]" if formation else "")
+        print(header)
+        print("-" * len(header))
+
+        entries  = roster.get("roster", [])
+        starters = [e for e in entries if e.get("starter")]
+        bench    = [e for e in entries if not e.get("starter")]
+
+        print("Starting XI:")
+        for e in starters:
+            ath   = e.get("athlete", {})
+            name  = ath.get("displayName", "Unknown")
+            pos   = (e.get("position") or {}).get("abbreviation", "")
+            jersey = ath.get("jersey", "")
+            flag  = " ↓" if e.get("subbedOut") else (" ↑" if e.get("subbedIn") else "")
+            slug  = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+            age, nat = fetch_athlete_info(ath.get("id", ""), slug)
+            extra = "  " + "  ".join(filter(None, [f"{age}y" if age else None, nat]))
+            print(f"  {jersey:>2}  {pos:<3}  {name}{flag}{extra}")
+
+        if bench:
+            print("Bench:")
+            for e in bench:
+                ath   = e.get("athlete", {})
+                name  = ath.get("displayName", "Unknown")
+                pos   = (e.get("position") or {}).get("abbreviation", "")
+                jersey = ath.get("jersey", "")
+                flag  = " ↑" if e.get("subbedIn") else ""
+                slug  = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+                age, nat = fetch_athlete_info(ath.get("id", ""), slug)
+                extra = "  " + "  ".join(filter(None, [f"{age}y" if age else None, nat]))
+                print(f"  {jersey:>2}  {pos:<3}  {name}{flag}{extra}")
+        print()
+
+
 def find_player(player_query):
     items = search_espn(player_query, "player")
     if not items:
@@ -462,6 +594,8 @@ def build_parser():
         help="Find which tier/league a club currently plays in.")
     parser.add_argument("-p", "--player",
         help="Find current club and full career history for a player.")
+    parser.add_argument("--lineup",
+        help="Show lineups for a team's match today (or on the given date). E.g. --lineup 'Arsenal'")
     return parser
 
 
@@ -470,7 +604,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        if args.team:
+        if args.lineup:
+            find_lineup(args.lineup, args.date)
+        elif args.team:
             find_team_tier(args.team)
         elif args.player:
             find_player(args.player)
