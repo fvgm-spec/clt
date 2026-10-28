@@ -131,7 +131,43 @@ Leicester City  →  Championship (2nd tier)
 
 Location data is sourced from **OpenStreetMap Nominatim** — no API key required.
 
-## Components
+## Setup
+
+### 1. Prerequisites
+
+- Python 3.9+
+- AWS account with credentials configured (`aws configure` or environment variables)
+- `boto3` installed:
+
+```bash
+pip install boto3
+```
+
+### 2. Deploy AWS resources
+
+Run the one-time setup script to create the DynamoDB cache table and (optionally) attach the required IAM policy to your user:
+
+```bash
+# minimal — uses default region (us-east-1)
+python3 setup_aws.py
+
+# specify region and attach IAM policy to your user
+python3 setup_aws.py --region eu-west-1 --iam-user YOUR_IAM_USERNAME
+```
+
+This creates:
+- DynamoDB table `espn_cache` (on-demand billing, 1-hour TTL)
+- Inline IAM policy `ESPNResultsDynamoDB` with least-privilege `GetItem`/`PutItem` on the table
+
+If you skip `--iam-user`, make sure your credentials already have `dynamodb:GetItem` and `dynamodb:PutItem` on the table.
+
+### 3. Run
+
+```bash
+python3 espn_results.py --lineup "liverpool"
+```
+
+
 
 ### APIs
 
