@@ -522,9 +522,10 @@ def fetch_coach(team_display_name):
         """Return first word only if it looks like a nationality, not a disambiguation."""
         if not description or "Topics referred to" in description or "may refer" in description:
             return None
+        _non_demonyms = {"Football", "Soccer", "Association", "Professional", "Former", "Head", "Coach", "Manager"}
         word = description.split()[0]
         # reject if it's not a plausible demonym (all alpha, title-case, reasonable length)
-        if word.isalpha() and word[0].isupper() and 3 <= len(word) <= 20:
+        if word.isalpha() and word[0].isupper() and 3 <= len(word) <= 20 and word not in _non_demonyms:
             return word
         return None
 
@@ -692,9 +693,9 @@ def find_lineup(team_query, date):
     for c in competitors:
         tid   = c.get("team", {}).get("id", "")
         tname = c.get("team", {}).get("displayName", "")
-        # resolve default league: use searched team's slug, or search ESPN for opponent
+        # resolve default league: use resolved league_slug for queried team, search ESPN for opponent
         if tname == team_name:
-            tleague = team.get("defaultLeagueSlug", league_slug)
+            tleague = league_slug
         else:
             try:
                 items = search_espn(tname, "team")
