@@ -428,6 +428,45 @@ def fetch_json(url):
 
 def fetch_team_standing(team_id, league_slug):
     """Return (position, points, gamesPlayed) for a team in their league standings."""
+    base = ".".join(league_slug.split(".")[:2])
+    try:
+        data = fetch_json(STANDINGS_API_URL.format(league=base))
+        entries = data.get("children", [{}])[0].get("standings", {}).get("entries", [])
+        for pos, entry in enumerate(entries, 1):
+            if str(entry.get("team", {}).get("id")) == str(team_id):
+                stats = {s["name"]: s["displayValue"] for s in entry.get("stats", [])}
+                return pos, stats.get("points", "?"), stats.get("gamesPlayed", "?")
+    except Exception:
+        pass
+    return None, None, None
+
+
+def fetch_next_match(team_id, league_slug):
+    """Return a string describing the team's next fixture."""
+    try:
+        data = fetch_json(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/teams/{team_id}")
+        ne = data.get("team", {}).get("nextEvent", [])
+        if not ne:
+            return None
+        comp = ne[0]["competitions"][0]
+        date_str = ne[0].get("date", "")
+        league_name = ne[0].get("league", {}).get("name", "")
+        competitors = comp.get("competitors", [])
+        home = next((c for c in competitors if c["homeAway"] == "home"), competitors[0])
+        away = next((c for c in competitors if c["homeAway"] == "away"), competitors[-1])
+        # parse date
+        try:
+            from datetime import timezone
+            dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc)
+            dt_local = dt.astimezone(DISPLAY_TIMEZONE)
+            date_fmt = dt_local.strftime("%a %d %b %Y, %H:%M")
+        except Exception:
+            date_fmt = date_str
+        opponent_label = f"{home['team']['displayName']} vs {away['team']['displayName']}"
+        return f"{opponent_label}  —  {date_fmt}" + (f"  ({league_name})" if league_name else "")
+    except Exception:
+        return None
+    """Return (position, points, gamesPlayed) for a team in their league standings."""
     # cups have no standings — use the team's default league (first segment pair e.g. eng.1)
     base = ".".join(league_slug.split(".")[:2])
     try:
@@ -620,10 +659,11 @@ def find_lineup(team_query, date):
     if venue_str:
         print(f"Venue: {venue_str}")
 
-    # league standing for each side
+    # league standing + next match for each side
     team_standing = {}
+    team_next = {}
     for c in competitors:
-        tid  = c.get("team", {}).get("id", "")
+        tid   = c.get("team", {}).get("id", "")
         tname = c.get("team", {}).get("displayName", "")
         # resolve default league: use searched team's slug, or search ESPN for opponent
         if tname == team_name:
@@ -637,6 +677,9 @@ def find_lineup(team_query, date):
         pos, pts, gp = fetch_team_standing(tid, tleague)
         if pos:
             team_standing[tname] = f"{pos}th  ({pts} pts, {gp} played)"
+        nxt = fetch_next_match(tid, tleague)
+        if nxt:
+            team_next[tname] = nxt
     print()
 
     rosters = summary.get("rosters", [])
@@ -672,6 +715,8 @@ def find_lineup(team_query, date):
         print("-" * len(header))
         if side_name in team_standing:
             print(f"League position: {team_standing[side_name]}")
+        if side_name in team_next:
+            print(f"Next match:      {team_next[side_name]}")
         if coach_name:
             coach_str = f"{coach_name}" + (f"  ({coach_nat})" if coach_nat else "")
             print(f"Manager: {coach_str}")
