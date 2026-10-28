@@ -15,7 +15,7 @@ BASE_URL       = "https://www.espn.com.uy/futbol/resultados/_/fecha/{date}"
 STANDINGS_URL  = "https://www.espn.com.uy/futbol/posiciones/_/liga/{league}"
 PLAYER_BIO_URL = "https://www.espn.com/soccer/player/bio/_/id/{id}/{slug}"
 SEARCH_API_URL = "https://site.web.api.espn.com/apis/common/v3/search?query={query}&type={type}&sport=soccer&limit=5"
-LINEUP_API_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={event_id}"
+LINEUP_API_URL     = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={event_id}"
 SCOREBOARD_API_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date}"
 STATE_MARKER   = "window['__espnfitt__']="
 DISPLAY_TIMEZONE = ZoneInfo("Europe/Madrid")
@@ -425,6 +425,33 @@ def fetch_json(url):
         raise RuntimeError(f"Could not fetch {url}: {exc}") from exc
 
 
+def fetch_coach(team_display_name):
+    """Return (name, nationality) for the current head coach via Wikipedia."""
+    import urllib.parse
+    try:
+        search_url = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={}&srlimit=1&format=json".format(
+            urllib.parse.quote(team_display_name + " football club"))
+        results = fetch_json(search_url)
+        hits = results.get("query", {}).get("search", [])
+        if not hits:
+            return None, None
+        title = hits[0]["title"].replace(" ", "_")
+        content_url = "https://en.wikipedia.org/w/api.php?action=query&titles={}&prop=revisions&rvprop=content&rvsection=0&format=json".format(
+            urllib.parse.quote(title))
+        data = fetch_json(content_url)
+        content = list(data["query"]["pages"].values())[0]["revisions"][0]["*"]
+        m = re.search(r"manager\s*=\s*\[\[([^\]]+)\]\]", content, re.IGNORECASE)
+        if not m:
+            return None, None
+        manager_name = m.group(1).split("|")[-1]
+        wiki = fetch_json("https://en.wikipedia.org/api/rest_v1/page/summary/" + urllib.parse.quote(manager_name))
+        description = wiki.get("description", "")
+        nationality = description.split()[0] if description else ""
+        return manager_name, nationality
+    except Exception:
+        return None, None
+
+
 _athlete_cache = {}
 
 def fetch_athlete_info(athlete_id, slug):
@@ -530,7 +557,15 @@ def find_lineup(team_query, date):
     home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
     away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[-1])
 
+    # venue
+    venue = comp.get("venue") or summary.get("gameInfo", {}).get("venue", {})
+    venue_name = venue.get("fullName", "")
+    venue_city = (venue.get("address") or {}).get("city", "")
+    venue_str  = ", ".join(filter(None, [venue_name, venue_city]))
+
     print(f"{away.get('team',{}).get('displayName','Away')} {away.get('score','')} - {home.get('score','')} {home.get('team',{}).get('displayName','Home')}  [{state}]")
+    if venue_str:
+        print(f"Venue: {venue_str}")
     print()
 
     rosters = summary.get("rosters", [])
@@ -541,13 +576,35 @@ def find_lineup(team_query, date):
     for roster in rosters:
         side_name = roster.get("team", {}).get("displayName", "Team")
         formation = roster.get("formation", "") if isinstance(roster.get("formation"), str) else (roster.get("formation") or {}).get("name", "")
-        header = f"{side_name}" + (f"  [{formation}]" if formation else "")
-        print(header)
-        print("-" * len(header))
 
         entries  = roster.get("roster", [])
         starters = [e for e in entries if e.get("starter")]
         bench    = [e for e in entries if not e.get("starter")]
+
+        # fetch age+nationality for all players
+        player_info = {}
+        for e in entries:
+            ath  = e.get("athlete", {})
+            aid  = ath.get("id", "")
+            slug = re.sub(r"[^a-z0-9]+", "-", ath.get("displayName", "").lower()).strip("-")
+            player_info[aid] = fetch_athlete_info(aid, slug)
+
+        # avg age of starters
+        starter_ages = [player_info[e["athlete"]["id"]][0] for e in starters if player_info.get(e["athlete"]["id"], (None,))[0]]
+        avg_age = round(sum(starter_ages) / len(starter_ages), 1) if starter_ages else None
+
+        # coach
+        coach_name, coach_nat = fetch_coach(side_name)
+
+        header = f"{side_name}" + (f"  [{formation}]" if formation else "")
+        print(header)
+        print("-" * len(header))
+        if coach_name:
+            coach_str = f"{coach_name}" + (f"  ({coach_nat})" if coach_nat else "")
+            print(f"Manager: {coach_str}")
+        if avg_age:
+            print(f"Avg age (XI): {avg_age}")
+        print()
 
         print("Starting XI:")
         for e in starters:
@@ -556,8 +613,7 @@ def find_lineup(team_query, date):
             pos   = (e.get("position") or {}).get("abbreviation", "")
             jersey = ath.get("jersey", "")
             flag  = " ↓" if e.get("subbedOut") else (" ↑" if e.get("subbedIn") else "")
-            slug  = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-            age, nat = fetch_athlete_info(ath.get("id", ""), slug)
+            age, nat = player_info.get(ath.get("id", ""), (None, ""))
             extra = "  " + "  ".join(filter(None, [f"{age}y" if age else None, nat]))
             print(f"  {jersey:>2}  {pos:<3}  {name}{flag}{extra}")
 
@@ -569,8 +625,7 @@ def find_lineup(team_query, date):
                 pos   = (e.get("position") or {}).get("abbreviation", "")
                 jersey = ath.get("jersey", "")
                 flag  = " ↑" if e.get("subbedIn") else ""
-                slug  = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-                age, nat = fetch_athlete_info(ath.get("id", ""), slug)
+                age, nat = player_info.get(ath.get("id", ""), (None, ""))
                 extra = "  " + "  ".join(filter(None, [f"{age}y" if age else None, nat]))
                 print(f"  {jersey:>2}  {pos:<3}  {name}{flag}{extra}")
         print()
