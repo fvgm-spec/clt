@@ -15,6 +15,7 @@ BASE_URL       = "https://www.espn.com.uy/futbol/resultados/_/fecha/{date}"
 STANDINGS_URL  = "https://www.espn.com.uy/futbol/posiciones/_/liga/{league}"
 PLAYER_BIO_URL = "https://www.espn.com/soccer/player/bio/_/id/{id}/{slug}"
 SEARCH_API_URL = "https://site.web.api.espn.com/apis/common/v3/search?query={query}&type={type}&sport=soccer&limit=5"
+STANDINGS_API_URL  = "https://site.web.api.espn.com/apis/v2/sports/soccer/{league}/standings"
 LINEUP_API_URL     = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/summary?event={event_id}"
 SCOREBOARD_API_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard?dates={date}"
 STATE_MARKER   = "window['__espnfitt__']="
@@ -425,6 +426,22 @@ def fetch_json(url):
         raise RuntimeError(f"Could not fetch {url}: {exc}") from exc
 
 
+def fetch_team_standing(team_id, league_slug):
+    """Return (position, points, gamesPlayed) for a team in their league standings."""
+    # cups have no standings — use the team's default league (first segment pair e.g. eng.1)
+    base = ".".join(league_slug.split(".")[:2])
+    try:
+        data = fetch_json(STANDINGS_API_URL.format(league=base))
+        entries = data.get("children", [{}])[0].get("standings", {}).get("entries", [])
+        for pos, entry in enumerate(entries, 1):
+            if str(entry.get("team", {}).get("id")) == str(team_id):
+                stats = {s["name"]: s["displayValue"] for s in entry.get("stats", [])}
+                return pos, stats.get("points", "?"), stats.get("gamesPlayed", "?")
+    except Exception:
+        pass
+    return None, None, None
+
+
 def fetch_coach(team_display_name):
     """Return (name, nationality) for the current head coach via Wikipedia."""
     import urllib.parse
@@ -602,6 +619,24 @@ def find_lineup(team_query, date):
     print(f"{away.get('team',{}).get('displayName','Away')} {away.get('score','')} - {home.get('score','')} {home.get('team',{}).get('displayName','Home')}  [{state}]")
     if venue_str:
         print(f"Venue: {venue_str}")
+
+    # league standing for each side
+    team_standing = {}
+    for c in competitors:
+        tid  = c.get("team", {}).get("id", "")
+        tname = c.get("team", {}).get("displayName", "")
+        # resolve default league: use searched team's slug, or search ESPN for opponent
+        if tname == team_name:
+            tleague = team.get("defaultLeagueSlug", league_slug)
+        else:
+            try:
+                items = search_espn(tname, "team")
+                tleague = items[0].get("defaultLeagueSlug", league_slug) if items else league_slug
+            except Exception:
+                tleague = league_slug
+        pos, pts, gp = fetch_team_standing(tid, tleague)
+        if pos:
+            team_standing[tname] = f"{pos}th  ({pts} pts, {gp} played)"
     print()
 
     rosters = summary.get("rosters", [])
@@ -635,6 +670,8 @@ def find_lineup(team_query, date):
         header = f"{side_name}" + (f"  [{formation}]" if formation else "")
         print(header)
         print("-" * len(header))
+        if side_name in team_standing:
+            print(f"League position: {team_standing[side_name]}")
         if coach_name:
             coach_str = f"{coach_name}" + (f"  ({coach_nat})" if coach_nat else "")
             print(f"Manager: {coach_str}")
