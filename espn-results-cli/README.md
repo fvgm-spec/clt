@@ -131,7 +131,35 @@ Leicester City  →  Championship (2nd tier)
 
 Location data is sourced from **OpenStreetMap Nominatim** — no API key required.
 
-## DynamoDB Cache
+## Components
+
+### APIs
+
+| Source | Used for |
+|---|---|
+| `espn.com.uy/futbol` (HTML scrape) | Daily results, fixtures, standings pages |
+| `site.api.espn.com/apis/site/v2` | Match summary + lineups, scoreboard by date |
+| `site.web.api.espn.com/apis/v2` | League standings, team search |
+| `site.web.api.espn.com/apis/common/v3/search` | Team/player search by name |
+| `en.wikipedia.org/api/rest_v1` | Manager nationality (page summary) |
+| `en.wikipedia.org/w/api.php` | Manager name from club infobox, disambiguation fallback |
+| `nominatim.openstreetmap.org` | Stadium coordinates from venue name |
+
+### AWS Services
+
+| Service | Role |
+|---|---|
+| **DynamoDB** (`espn_cache`, `us-east-1`) | Response cache — stores every ESPN + Wikipedia API response keyed by URL, with a 1-hour TTL |
+
+### Python Dependencies
+
+| Package | Role |
+|---|---|
+| `boto3` | DynamoDB read/write |
+| `zoneinfo` | Display times in Europe/Madrid timezone |
+| Standard library only otherwise (`urllib`, `json`, `re`, `argparse`) | — |
+
+
 
 All ESPN and Wikipedia API responses are cached in a DynamoDB table (`espn_cache`, `us-east-1`) with a 1-hour TTL. Repeated queries for the same team within the hour skip the HTTP calls entirely. Entries expire automatically via DynamoDB TTL — no manual cleanup needed.
 
