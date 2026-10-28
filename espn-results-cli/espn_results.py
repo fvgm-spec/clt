@@ -428,6 +428,23 @@ def fetch_json(url):
 def fetch_coach(team_display_name):
     """Return (name, nationality) for the current head coach via Wikipedia."""
     import urllib.parse
+
+    def wiki_summary(name):
+        try:
+            return fetch_json("https://en.wikipedia.org/api/rest_v1/page/summary/" + urllib.parse.quote(name))
+        except Exception:
+            return {}
+
+    def extract_nationality(description):
+        """Return first word only if it looks like a nationality, not a disambiguation."""
+        if not description or "Topics referred to" in description or "may refer" in description:
+            return None
+        word = description.split()[0]
+        # reject if it's not a plausible demonym (all alpha, title-case, reasonable length)
+        if word.isalpha() and word[0].isupper() and 3 <= len(word) <= 20:
+            return word
+        return None
+
     try:
         search_url = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={}&srlimit=1&format=json".format(
             urllib.parse.quote(team_display_name + " football club"))
@@ -444,9 +461,28 @@ def fetch_coach(team_display_name):
         if not m:
             return None, None
         manager_name = m.group(1).split("|")[-1]
-        wiki = fetch_json("https://en.wikipedia.org/api/rest_v1/page/summary/" + urllib.parse.quote(manager_name))
-        description = wiki.get("description", "")
-        nationality = description.split()[0] if description else ""
+
+        # try direct summary first
+        wiki = wiki_summary(manager_name)
+        nationality = extract_nationality(wiki.get("description", ""))
+
+        # if disambiguation, retry with "footballer" or "football manager"
+        if nationality is None:
+            for suffix in ["football manager", "footballer"]:
+                wiki = wiki_summary(f"{manager_name} ({suffix})")
+                nationality = extract_nationality(wiki.get("description", ""))
+                if nationality:
+                    break
+
+        # last resort: search API
+        if nationality is None:
+            sr = fetch_json("https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={}&srlimit=1&format=json".format(
+                urllib.parse.quote(manager_name + " football manager")))
+            sr_hits = sr.get("query", {}).get("search", [])
+            if sr_hits:
+                wiki = wiki_summary(sr_hits[0]["title"])
+                nationality = extract_nationality(wiki.get("description", ""))
+
         return manager_name, nationality
     except Exception:
         return None, None
