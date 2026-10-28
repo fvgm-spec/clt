@@ -441,13 +441,19 @@ def fetch_athlete_info(athlete_id, slug):
         age = None
         if dob_raw:
             try:
-                # try DD/MM/YYYY first, then YYYY-MM-DD
-                for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d"):
                     try:
                         dob = datetime.strptime(dob_raw[:10], fmt)
+                        # reject implausible dates (e.g. MM/DD misread as DD/MM)
+                        if fmt == "%d/%m/%Y" and int(dob_raw.split("/")[0]) > 12:
+                            pass  # day > 12 means it can only be DD/MM
+                        elif fmt == "%m/%d/%Y" and int(dob_raw.split("/")[0]) > 12:
+                            continue  # month > 12 is invalid, skip
                         today = datetime.now()
                         age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
-                        break
+                        if 10 <= age <= 50:  # sanity check
+                            break
+                        age = None
                     except ValueError:
                         continue
             except Exception:
