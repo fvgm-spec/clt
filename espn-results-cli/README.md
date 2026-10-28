@@ -195,15 +195,25 @@ python3 espn_results.py --lineup "liverpool"
 | `zoneinfo` | Display times in Europe/Madrid timezone |
 | Standard library only otherwise (`urllib`, `json`, `re`, `argparse`) | — |
 
+## Streamlit UI
 
+A web UI is available via `app.py` with five tabs mirroring the CLI commands:
 
-All ESPN and Wikipedia API responses are cached in a DynamoDB table (`espn_cache`, `us-east-1`) with a 1-hour TTL. Repeated queries for the same team within the hour skip the HTTP calls entirely. Entries expire automatically via DynamoDB TTL — no manual cleanup needed.
+| Tab | Equivalent CLI |
+|---|---|
+| Results | `python3 espn_results.py [date] [-l league]` |
+| Lineup | `python3 espn_results.py --lineup <team> [date]` |
+| Standings | `python3 espn_results.py -s -l <league>` |
+| Player | `python3 espn_results.py -p <player>` |
+| Team | `python3 espn_results.py -t <team>` |
 
-Requires `boto3` and valid AWS credentials with DynamoDB read/write access:
+Run locally:
 
 ```bash
-pip install boto3
+streamlit run app.py
 ```
+
+All ESPN and Wikipedia API responses are cached in a DynamoDB table (`espn_cache`, `us-east-1`) with a 1-hour TTL.
 
 ## Player Lookup
 
