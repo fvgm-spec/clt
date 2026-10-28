@@ -91,6 +91,10 @@ Bologna 3 - 2 AC Milan  [Second Half]
 
 AC Milan  [4-2-3-1]
 -------------------
+League position: 3rd  (18 pts, 8 played)
+Next match:      AC Milan vs Inter  —  Sat 01 Nov 2026, 20:45  (Italian Serie A)
+Manager: Sergio Conceição  (Portuguese)
+Avg age (XI): 27.1
 Starting XI:
    1  G    Mike Maignan  31y  France
    5  CD-L  Strahinja Pavlovic  25y  Serbia
@@ -101,6 +105,7 @@ Bench:
 ```
 
 - `↓` = subbed off · `↑` = subbed on
+- Each team block shows current league position (pts + games played), next scheduled fixture, and manager with nationality.
 - Automatically searches cups and second divisions (Carabao Cup, FA Cup, Copa del Rey, etc.) when the team has no match in their default league that day.
 
 ## Team Tier & Stadium Location
@@ -125,6 +130,16 @@ Leicester City  →  Championship (2nd tier)
 ```
 
 Location data is sourced from **OpenStreetMap Nominatim** — no API key required.
+
+## DynamoDB Cache
+
+All ESPN and Wikipedia API responses are cached in a DynamoDB table (`espn_cache`, `us-east-1`) with a 1-hour TTL. Repeated queries for the same team within the hour skip the HTTP calls entirely. Entries expire automatically via DynamoDB TTL — no manual cleanup needed.
+
+Requires `boto3` and valid AWS credentials with DynamoDB read/write access:
+
+```bash
+pip install boto3
+```
 
 ## Player Lookup
 
