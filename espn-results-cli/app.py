@@ -106,41 +106,120 @@ def render_lineup(text):
 
 def render_standings(text):
     lines = text.splitlines()
-    header_done = False
     rows = []
     for line in lines:
         if not line.strip() or line.startswith("Standings") or line.startswith("http"):
             continue
         if re.match(r"^-+$", line):
             continue
-        # season header
-        if re.match(r"^\d{4}-\d{4}", line):
+        if re.match(r"^\d{4}", line):
             st.subheader(f"🏆 {line.strip()}")
             continue
-        # column header line
-        if not header_done and re.match(r"^\s+#\s+Team", line):
-            header_done = True
+        if re.match(r"^\s+#\s+Team", line):
             continue
-        # data row: "   1  Manchester City   10   8  +15   24 ..."
-        m = re.match(r"^\s*(\d+)\s{2,}(.+?)\s{2,}(.+)$", line)
+        m = re.match(r"^\s*(\d+)\s{2,}(.+?)\s{2,}(\d+)\s+(\d+)\s+([+-]?\d+)\s+(\d+).*?(?:\[(.+)\])?$", line)
         if m:
-            rows.append((m.group(1), m.group(2).strip(), m.group(3).strip()))
+            rows.append({"#": int(m.group(1)), "Team": m.group(2).strip(),
+                         "J": m.group(3), "P": m.group(4), "DIF": m.group(5),
+                         "PTS": m.group(6), "Zone": (m.group(7) or "").strip()})
 
-    if rows:
-        cols = st.columns([1, 4, 3])
-        cols[0].markdown("**#**")
-        cols[1].markdown("**Team**")
-        cols[2].markdown("**Stats**")
-        for rank, team, stats in rows:
-            cols = st.columns([1, 4, 3])
-            cols[0].write(rank)
-            cols[1].write(team)
-            cols[2].write(stats)
+    if not rows:
+        st.code(text); return
+
+    ZONE_COLORS = {"champions": "#1a6b3c", "europa": "#1a4a8a", "conference": "#2d6b8a",
+                   "relegation": "#8a1a1a", "promotion": "#1a6b3c"}
+
+    st.markdown("""<style>
+    .st-row{display:flex;align-items:center;padding:6px 4px;border-bottom:1px solid #2a2a2a;font-size:14px}
+    .st-rank{width:32px;font-weight:bold;color:#aaa}.st-team{flex:1;font-weight:500}
+    .st-stat{width:40px;text-align:center;color:#ccc}.st-pts{width:40px;text-align:center;font-weight:bold;color:#fff}
+    .st-zone{width:12px;border-radius:2px;height:20px;margin-right:8px}.st-hdr{color:#666;font-size:12px}
+    </style>""", unsafe_allow_html=True)
+
+    st.markdown('<div class="st-row st-hdr"><div class="st-zone"></div><div class="st-rank">#</div><div class="st-team">Team</div><div class="st-stat">J</div><div class="st-stat">P</div><div class="st-stat">DIF</div><div class="st-pts">PTS</div></div>', unsafe_allow_html=True)
+
+    for r in rows:
+        zl = r["Zone"].lower()
+        color = next((v for k, v in ZONE_COLORS.items() if k in zl), "transparent")
+        dif_color = "#4caf50" if r["DIF"].startswith("+") else ("#f44336" if r["DIF"].startswith("-") else "#ccc")
+        st.markdown(
+            f'<div class="st-row" title="{r["Zone"]}">'
+            f'<div class="st-zone" style="background:{color}"></div>'
+            f'<div class="st-rank">{r["#"]}</div><div class="st-team">{r["Team"]}</div>'
+            f'<div class="st-stat">{r["J"]}</div><div class="st-stat">{r["P"]}</div>'
+            f'<div class="st-stat" style="color:{dif_color}">{r["DIF"]}</div>'
+            f'<div class="st-pts">{r["PTS"]}</div></div>', unsafe_allow_html=True)
+
+    shown, legend_parts = set(), []
+    for r in rows:
+        z = r["Zone"]
+        if z and z not in shown:
+            shown.add(z)
+            color = next((v for k, v in ZONE_COLORS.items() if k in z.lower()), "#555")
+            legend_parts.append(f'<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:12px;color:#aaa"><span style="width:10px;height:10px;border-radius:2px;background:{color};display:inline-block"></span>{z}</span>')
+    if legend_parts:
+        st.markdown("<br>" + "".join(legend_parts), unsafe_allow_html=True)
 
 
-def render_plain(text):
-    """Fallback: render as clean markdown instead of code block."""
-    st.markdown(f"```\n{text}\n```")
+def render_player(text):
+    lines = [l for l in text.splitlines() if l.strip()]
+    if not lines:
+        st.info("No data."); return
+
+    st.markdown(f"## 👤 {lines[0].strip()}")
+    info, career, in_career = {}, [], False
+    for line in lines[1:]:
+        if line.strip().startswith("Career"):
+            in_career = True; continue
+        if re.match(r"^-+$", line.strip()):
+            continue
+        if in_career:
+            m = re.match(r"^\s+(.+?)\s+\((\d+) apps?\)", line)
+            if m:
+                career.append((m.group(1).strip(), m.group(2)))
+        else:
+            m = re.match(r"^\s+(.+?)\s*:\s*(.+)$", line)
+            if m:
+                info[m.group(1).strip()] = m.group(2).strip()
+
+    ICONS = {"Current club": "🏟️", "League": "🏆", "Position": "⚽", "Nationality": "🌍"}
+    cols = st.columns(2)
+    for i, (k, v) in enumerate(info.items()):
+        cols[i % 2].metric(label=f"{ICONS.get(k, '•')} {k}", value=v)
+
+    if career:
+        st.markdown("---\n**Career**")
+        for club, apps in career:
+            st.markdown(f"&nbsp;&nbsp;🔹 **{club}** — {apps} apps", unsafe_allow_html=True)
+
+
+def render_team(text):
+    lines = [l for l in text.splitlines() if l.strip()]
+    if not lines:
+        st.info("No data."); return
+
+    m = re.match(r"^(.+?)\s+→\s+(.+)$", lines[0])
+    if m:
+        st.markdown(f"## 🏟️ {m.group(1).strip()}")
+        st.markdown(f"**{m.group(2).strip()}**")
+    else:
+        st.markdown(f"## 🏟️ {lines[0]}")
+
+    ICONS = {"Stadium": "🏟️", "Location": "📍", "Coords": "🗺️", "Maps": "🗺️", "GMaps": "📌"}
+    for line in lines[1:]:
+        m = re.match(r"^\s+(.+?)\s*:\s*(.+)$", line)
+        if not m:
+            continue
+        k, v = m.group(1).strip(), m.group(2).strip()
+        icon = ICONS.get(k, "•")
+        if k == "Maps":
+            st.markdown(f"{icon} [OpenStreetMap]({v})")
+        elif k == "GMaps":
+            st.markdown(f"{icon} [Google Maps]({v})")
+        elif k == "Coords":
+            st.caption(f"{icon} {v}")
+        else:
+            st.markdown(f"{icon} **{k}:** {v}")
 
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -186,7 +265,7 @@ with tab4:
         else:
             with st.spinner("Fetching…"):
                 out = call({"action": "player", "name": player})
-            render_plain(out)
+            render_player(out)
 
 with tab5:
     team_t = st.text_input("Team tier lookup", placeholder="Leicester City …")
@@ -196,4 +275,4 @@ with tab5:
         else:
             with st.spinner("Fetching…"):
                 out = call({"action": "team", "name": team_t})
-            render_plain(out)
+            render_team(out)
