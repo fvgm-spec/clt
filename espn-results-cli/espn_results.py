@@ -789,6 +789,14 @@ def find_player(player_query):
     league = (player.get("leagueRelationships") or [{}])[0]
     league_name = league.get("displayName", player.get("league", ""))
 
+    # fetch stats page for headshot URL (different internal ID than search API)
+    stats_url = f"https://www.espn.com/soccer/player/_/id/{pid}/{slug}"
+    stats_html, _ = fetch_html_url(stats_url)
+    headshot_urls = re.findall(
+        r'https://a\.espncdn\.com/i/headshots/soccer/players/full/\d+\.png', stats_html
+    )
+    headshot = headshot_urls[0] if headshot_urls else ""
+
     # fetch bio page to get current club + career
     url = PLAYER_BIO_URL.format(id=pid, slug=slug)
     html, _ = fetch_html_url(url)
@@ -799,6 +807,8 @@ def find_player(player_query):
 
     current_club = hdr.get("tm") or player.get("teamName", "N/A")
     print(f"espn_id:{pid}")
+    if headshot:
+        print(f"headshot:{headshot}")
     print(f"{player['displayName']}")
     print(f"  Current club : {current_club}")
     print(f"  League       : {league_name}")

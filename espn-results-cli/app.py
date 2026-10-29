@@ -166,20 +166,23 @@ def render_player(text):
     if not lines:
         st.info("No data."); return
 
-    # extract hidden espn_id line
+    # extract hidden espn_id and headshot lines
     espn_id = None
+    headshot = None
     clean = []
     for l in lines:
         if l.startswith("espn_id:"):
             espn_id = l.split(":", 1)[1].strip()
+        elif l.startswith("headshot:"):
+            headshot = l.split(":", 1)[1].strip()
         else:
             clean.append(l)
     lines = clean
 
     st.markdown(f"## 👤 {lines[0].strip()}")
 
-    if espn_id:
-        st.image(f"https://a.espncdn.com/i/headshots/soccer/players/full/{espn_id}.png", width=120)
+    if headshot:
+        st.image(headshot, width=120)
 
     info, career, in_career = {}, [], False
     for line in lines[1:]:
@@ -202,7 +205,7 @@ def render_player(text):
         cols[i % 2].metric(label=f"{ICONS.get(k, '•')} {k}", value=v)
 
     if career:
-        st.markdown("---\n**Career**")
+        st.markdown("---\n**Career** *(apps = current season only)*")
         for club, apps in career:
             st.markdown(f"&nbsp;&nbsp;🔹 **{club}** — {apps} apps", unsafe_allow_html=True)
 
