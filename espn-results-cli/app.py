@@ -179,11 +179,6 @@ def render_player(text):
             clean.append(l)
     lines = clean
 
-    st.markdown(f"## 👤 {lines[0].strip()}")
-
-    if headshot:
-        st.image(headshot, width=120)
-
     info, career, in_career = {}, [], False
     for line in lines[1:]:
         if line.strip().startswith("Career"):
@@ -200,9 +195,18 @@ def render_player(text):
                 info[m.group(1).strip()] = m.group(2).strip()
 
     ICONS = {"Current club": "🏟️", "League": "🏆", "Position": "⚽", "Nationality": "🌍"}
-    cols = st.columns(2)
+
+    if headshot:
+        col_img, col_info = st.columns([1, 3])
+        col_img.image(headshot, width=160)
+        col_info.markdown(f"## {lines[0].strip()}")
+        metric_cols = col_info.columns(2)
+    else:
+        st.markdown(f"## {lines[0].strip()}")
+        metric_cols = st.columns(2)
+
     for i, (k, v) in enumerate(info.items()):
-        cols[i % 2].metric(label=f"{ICONS.get(k, '•')} {k}", value=v)
+        metric_cols[i % 2].metric(label=f"{ICONS.get(k, '•')} {k}", value=v)
 
     if career:
         st.markdown("---\n**Career**")
