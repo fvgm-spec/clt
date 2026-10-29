@@ -777,6 +777,22 @@ def find_lineup(team_query, date):
         print()
 
 
+def _wiki_career(player_name):
+    """Fetch full career club appearances from Wikipedia."""
+    try:
+        slug = player_name.replace(" ", "_")
+        url  = f"https://en.wikipedia.org/w/api.php?action=parse&page={slug}&prop=wikitext&format=json"
+        data = fetch_json(url)
+        wikitext = data["parse"]["wikitext"]["*"]
+        blocks = re.findall(
+            r'\|rowspan=\"\d+\"\|\[\[([^\]|]+?)(?:\|[^\]]+)?\]\].+?!colspan=\"2\"\|Total\s*\n!(\d+)',
+            wikitext, re.DOTALL
+        )
+        return [(re.sub(r'\s*F\.?C\.?\s*$', '', c).strip(), int(a)) for c, a in blocks]
+    except Exception:
+        return []
+
+
 def find_player(player_query):
     items = search_espn(player_query, "player")
     if not items:
@@ -797,13 +813,12 @@ def find_player(player_query):
     )
     headshot = headshot_urls[0] if headshot_urls else ""
 
-    # fetch bio page to get current club + career
+    # fetch bio page to get current club
     url = PLAYER_BIO_URL.format(id=pid, slug=slug)
     html, _ = fetch_html_url(url)
     state = extract_state(html)
     pdata = state["page"]["content"]["player"]
     hdr   = pdata.get("plyrHdr", {}).get("ath", {})
-    hist  = pdata.get("hist", [])
 
     current_club = hdr.get("tm") or player.get("teamName", "N/A")
     print(f"espn_id:{pid}")
@@ -816,17 +831,12 @@ def find_player(player_query):
     print(f"  Nationality  : {hdr.get('ctz', '')}")
     print()
 
-    if hist:
+    career = _wiki_career(player["displayName"])
+    if career:
         print("Career (clubs):")
         print("-" * 40)
-        for entry in hist:
-            name = entry.get("nm", "")
-            apps = entry.get("num", "")
-            link = entry.get("href", "")
-            apps_str = f"  ({apps} apps)" if apps else ""
-            print(f"  {name}{apps_str}")
-            if link:
-                print(f"    {link}")
+        for club, apps in career:
+            print(f"  {club}  ({apps} apps)")
 
 
 def build_parser():

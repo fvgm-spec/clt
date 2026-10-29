@@ -205,7 +205,7 @@ def render_player(text):
         cols[i % 2].metric(label=f"{ICONS.get(k, '•')} {k}", value=v)
 
     if career:
-        st.markdown("---\n**Career** *(apps = current season only)*")
+        st.markdown("---\n**Career**")
         for club, apps in career:
             st.markdown(f"&nbsp;&nbsp;🔹 **{club}** — {apps} apps", unsafe_allow_html=True)
 
