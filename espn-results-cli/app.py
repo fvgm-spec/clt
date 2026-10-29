@@ -166,7 +166,21 @@ def render_player(text):
     if not lines:
         st.info("No data."); return
 
+    # extract hidden espn_id line
+    espn_id = None
+    clean = []
+    for l in lines:
+        if l.startswith("espn_id:"):
+            espn_id = l.split(":", 1)[1].strip()
+        else:
+            clean.append(l)
+    lines = clean
+
     st.markdown(f"## 👤 {lines[0].strip()}")
+
+    if espn_id:
+        st.image(f"https://a.espncdn.com/i/headshots/soccer/players/full/{espn_id}.png", width=120)
+
     info, career, in_career = {}, [], False
     for line in lines[1:]:
         if line.strip().startswith("Career"):

@@ -798,6 +798,7 @@ def find_player(player_query):
     hist  = pdata.get("hist", [])
 
     current_club = hdr.get("tm") or player.get("teamName", "N/A")
+    print(f"espn_id:{pid}")
     print(f"{player['displayName']}")
     print(f"  Current club : {current_club}")
     print(f"  League       : {league_name}")
