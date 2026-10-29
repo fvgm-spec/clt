@@ -711,7 +711,7 @@ def find_lineup(team_query, date):
     print()
 
     rosters = summary.get("rosters", [])
-    if not rosters:
+    if not rosters or all(len(r.get("roster", [])) == 0 for r in rosters):
         print("Lineup data not available yet (match may not have started).")
         return
 
