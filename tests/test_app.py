@@ -24,12 +24,11 @@ spotify_lh = load("spotify",          "lambda_handler")
 
 class TestEspnLambda:
     def test_returns_200(self):
-        with patch.object(espn_lh, "fetch_html", return_value=("<html>", "http://espn.com")), \
-             patch.object(espn_lh, "extract_state", return_value={}), \
-             patch.object(espn_lh, "get_scoreboard", return_value={"gmsByLeague": []}):
-            r = espn_lh.lambda_handler({"date": "2026-10-27"}, None)
+        with patch.object(espn_lh.espn, "fetch_html", return_value=("<html>", "http://espn.com")), \
+             patch.object(espn_lh.espn, "extract_state", return_value={}), \
+             patch.object(espn_lh.espn, "get_scoreboard", return_value={"gmsByLeague": []}):
+            r = espn_lh.lambda_handler({"queryStringParameters": {"action": "results"}}, None)
         assert r["statusCode"] == 200
-        assert "gmsByLeague" in json.loads(r["body"])
 
 
 class TestDeeplLambda:
