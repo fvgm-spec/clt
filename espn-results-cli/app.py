@@ -6,7 +6,7 @@ API = "https://v114kxt4i7.execute-api.us-east-1.amazonaws.com/"
 
 def call(params):
     try:
-        r = requests.get(API, params=params, timeout=30, verify=False)
+        r = requests.get(API, params=params, timeout=30)
         data = r.json()
         return data.get("result") or data.get("error", "No response")
     except Exception as e:
