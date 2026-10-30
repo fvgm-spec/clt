@@ -272,7 +272,25 @@ with tab2:
             render_lineup(out)
 
 with tab3:
-    league_s = st.text_input("League", placeholder="premier league, laliga, eng.1 …")
+    LEAGUE_SLUGS = {
+        "Premier League":       "eng.1",
+        "Championship":         "eng.2",
+        "La Liga":              "esp.1",
+        "Bundesliga":           "ger.1",
+        "Serie A":              "ita.1",
+        "Ligue 1":              "fra.1",
+        "Champions League":     "UEFA.Champions_League",
+        "Europa League":        "UEFA.Europa_League",
+        "Conference League":    "UEFA.Europa_Conference_League",
+        "Libertadores":         "CONMEBOL.Libertadores",
+        "Sudamericana":         "CONMEBOL.Sudamericana",
+        "Primera Chile":        "chi.1",
+        "Primera Colombia":     "col.1",
+        "Primera Peru":         "per.1",
+        "Primera Argentina":    "arg.1",
+    }
+    league_label = st.selectbox("League", list(LEAGUE_SLUGS.keys()))
+    league_s = LEAGUE_SLUGS[league_label]
     if st.button("Fetch standings"):
         if not league_s:
             st.warning("Enter a league.")
