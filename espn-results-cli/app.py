@@ -291,13 +291,12 @@ with tab3:
     }
     league_label = st.selectbox("League", list(LEAGUE_SLUGS.keys()))
     league_s = LEAGUE_SLUGS[league_label]
-    if st.button("Fetch standings"):
-        if not league_s:
-            st.warning("Enter a league.")
-        else:
-            with st.spinner("Fetching…"):
-                out = call({"action": "standings", "league": league_s})
-            render_standings(out)
+    with st.form("standings_form"):
+        submitted = st.form_submit_button("Fetch standings")
+    if submitted:
+        with st.spinner("Fetching…"):
+            out = call({"action": "standings", "league": league_s})
+        render_standings(out)
 
 with tab4:
     player = st.text_input("Player lookup", placeholder="Harry Kane, Messi …")
