@@ -83,4 +83,8 @@ def lambda_handler(event, context):
         out, err = _capture(espn.find_team_tier, name)
         return _ok(out) if not err else _err(err)
 
-    return _err(f"Unknown action '{action}'. Valid: results, lineup, standings, player, team")
+    if action == "scrape_stadiums":
+        stored = espn.scrape_stadiums()
+        return _ok(f"Scraped and stored {stored} stadiums.")
+
+    return _err(f"Unknown action '{action}'. Valid: results, lineup, standings, player, team, scrape_stadiums")

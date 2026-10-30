@@ -198,7 +198,10 @@ def render_player(text):
 
     if headshot:
         col_img, col_info = st.columns([1, 3])
-        col_img.image(headshot, width=160)
+        try:
+            col_img.image(headshot, width=160)
+        except Exception:
+            pass
         col_info.markdown(f"## {lines[0].strip()}")
         metric_cols = col_info.columns(2)
     else:

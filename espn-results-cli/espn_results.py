@@ -301,8 +301,12 @@ def search_espn(query, result_type="team"):
 LEAGUE_COUNTRY = {
     "eng": "gb", "esp": "es", "ger": "de", "ita": "it", "fra": "fr",
     "por": "pt", "ned": "nl", "bel": "be", "sco": "gb", "tur": "tr",
+    "rus": "ru", "gre": "gr", "cze": "cz", "aut": "at", "sui": "ch",
+    "den": "dk", "swe": "se", "nor": "no", "pol": "pl",
     "arg": "ar", "bra": "br", "chi": "cl", "col": "co", "per": "pe",
-    "uru": "uy", "mex": "mx", "usa": "us",
+    "uru": "uy", "mex": "mx", "usa": "us", "ecu": "ec", "ven": "ve",
+    "bol": "bo", "par": "py",
+    "jpn": "jp", "kor": "kr", "chn": "cn", "aus": "au", "sau": "sa", "uae": "ae",
 }
 
 # OSM uses official stadium names, not club names — map well-known divergences
@@ -324,12 +328,90 @@ STADIUM_ALIASES = {
     "chelsea":           "Stamford Bridge",
     "liverpool":         "Anfield",
     "tottenham hotspur": "Tottenham Hotspur Stadium",
+    "stade rennais":     "Roazhon Park",
+    "olympique lyonnais":"Groupama Stadium",
+    "olympique de marseille": "Orange Vélodrome",
+    "paris saint-germain":    "Parc des Princes",
+    "as monaco":         "Stade Louis II",
+    "lille":             "Stade Pierre-Mauroy",
+    "rc lens":           "Stade Bollaert-Delelis",
+    "stade brestois":    "Stade Francis-Le Blé",
 }
 
 
-def get_team_location(team_name, league_slug=""):
+def scrape_stadiums():
+    """Scrape home stadium for every team across all top leagues and store in DynamoDB."""
+    import time as _time
+    leagues = [slug for slugs in FALLBACK_LEAGUES.values() for slug in slugs
+               if not any(x in slug for x in ("cup", "copa", "coupe", "pokal", "fa_cup", "league_cup", "Conference"))]
+
+    stored = 0
+    for league in leagues:
+        try:
+            data = fetch_json(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams")
+            teams = data.get("sports", [{}])[0].get("leagues", [{}])[0].get("teams", [])
+        except Exception:
+            continue
+        for t in teams:
+            team = t.get("team", {})
+            tid  = team.get("id")
+            name = team.get("displayName", "")
+            if not tid:
+                continue
+            ddb_key = f"stadium#{tid}"
+            try:
+                item = _cache_table.get_item(Key={"cache_key": ddb_key}).get("Item")
+                if item:
+                    continue  # already stored
+            except Exception:
+                pass
+            # find home venue from schedule
+            stadium = None
+            try:
+                sched = fetch_json(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{tid}/schedule")
+                for event in sched.get("events", []):
+                    comp = event.get("competitions", [{}])[0]
+                    # home team check
+                    for competitor in comp.get("competitors", []):
+                        if competitor.get("homeAway") == "home" and competitor.get("team", {}).get("id") == tid:
+                            venue = comp.get("venue", {})
+                            stadium = venue.get("fullName")
+                            break
+                    if stadium:
+                        break
+            except Exception:
+                pass
+            if stadium:
+                try:
+                    _cache_table.put_item(Item={"cache_key": ddb_key, "team_id": tid,
+                                                "team_name": name, "stadium": stadium,
+                                                "expires_at": 9999999999})
+                    stored += 1
+                except Exception:
+                    pass
+            _time.sleep(0.1)
+    return stored
+
+
+def _get_stadium_from_ddb(team_id):
+    try:
+        item = _cache_table.get_item(Key={"cache_key": f"stadium#{team_id}"}).get("Item")
+        return item.get("stadium") if item else None
+    except Exception:
+        return None
+
+
+def get_team_location(team_name, league_slug="", team_id=None):
     """Query Nominatim (OpenStreetMap) for a football club's stadium coordinates."""
     import urllib.parse, time as _time
+
+    # DynamoDB lookup first
+    if team_id:
+        stadium = _get_stadium_from_ddb(team_id)
+        if stadium:
+            results = _nominatim_search(stadium, league_slug)
+            if results:
+                return results[0]
 
     cc = LEAGUE_COUNTRY.get(league_slug.split(".")[0])
 
@@ -367,6 +449,20 @@ def get_team_location(team_name, league_slug=""):
     return None
 
 
+def _nominatim_search(stadium_name, league_slug=""):
+    import urllib.parse
+    cc = LEAGUE_COUNTRY.get(league_slug.split(".")[0])
+    params = {"q": stadium_name, "format": "json", "limit": 5, "addressdetails": 1}
+    if cc:
+        params["countrycodes"] = cc
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
+    req = Request(url, headers={"User-Agent": "espn-results-cli/0.1"})
+    try:
+        return json.loads(urlopen(req, timeout=10).read())
+    except Exception:
+        return []
+
+
 def find_team_tier(team_query):
     items = search_espn(team_query, "team")
     if not items:
@@ -391,7 +487,7 @@ def find_team_tier(team_query):
     league = LEAGUE_NAMES.get(slug, slug or "Unknown")
     print(f"{team['displayName']}  →  {league}")
 
-    loc = get_team_location(team["displayName"], slug)
+    loc = get_team_location(team["displayName"], slug, team_id=team.get("id"))
     if loc:
         addr = loc.get("address", {})
         city    = (addr.get("city") or addr.get("town") or addr.get("municipality")
@@ -414,6 +510,34 @@ FALLBACK_LEAGUES = {
     "ger": ["ger.1", "ger.2", "ger.dfb_pokal"],
     "ita": ["ita.1", "ita.2", "ita.coppa_italia"],
     "fra": ["fra.1", "fra.2", "fra.coupe_de_france"],
+    "por": ["por.1"],
+    "ned": ["ned.1", "ned.2"],
+    "bel": ["bel.1"],
+    "sco": ["sco.1"],
+    "tur": ["tur.1"],
+    "rus": ["rus.1"],
+    "gre": ["gre.1"],
+    "cze": ["cze.1"],
+    "aut": ["aut.1"],
+    "sui": ["sui.1"],
+    "den": ["den.1"],
+    "swe": ["swe.1"],
+    "nor": ["nor.1"],
+    "arg": ["arg.1", "arg.2"],
+    "bra": ["bra.1", "bra.2"],
+    "chi": ["chi.1"],
+    "col": ["col.1"],
+    "per": ["per.1"],
+    "uru": ["uru.1"],
+    "mex": ["mex.1", "mex.2"],
+    "usa": ["usa.1"],
+    "ecu": ["ecu.1"],
+    "ven": ["ven.1"],
+    "bol": ["bol.1"],
+    "par": ["par.1"],
+    "jpn": ["jpn.1"],
+    "chn": ["chn.1"],
+    "aus": ["aus.1"],
     "UEFA": ["UEFA.Champions_League", "UEFA.Europa_League", "UEFA.Europa_Conference_League"],
 }
 
@@ -813,13 +937,7 @@ def find_player(player_query):
     hdr   = pdata.get("plyrHdr", {}).get("ath", {})
 
     # find headshot: only use the player's own ESPN id (avoid picking up teammates)
-    headshot = ""
-    candidate_url = f"https://a.espncdn.com/i/headshots/soccer/players/full/{pid}.png"
-    try:
-        urlopen(Request(candidate_url, headers={"User-Agent": "Mozilla/5.0"}), timeout=5)
-        headshot = candidate_url
-    except Exception:
-        pass
+    headshot = f"https://a.espncdn.com/i/headshots/soccer/players/full/{pid}.png"
 
     current_club = hdr.get("tm") or player.get("teamName", "N/A")
     print(f"espn_id:{pid}")

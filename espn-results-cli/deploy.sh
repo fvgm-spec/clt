@@ -20,7 +20,7 @@ for FN in "${FUNCTIONS[@]}"; do
         --region "$REGION" \
         --no-verify-ssl \
         --query "FunctionName" \
-        --output text
+        --output text 2>&1 | grep -v InsecureRequest || echo "    WARNING: failed to update $FN"
     echo "    Done."
 done
 
