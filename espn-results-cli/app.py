@@ -4,8 +4,8 @@ import streamlit as st
 
 API = "https://v114kxt4i7.execute-api.us-east-1.amazonaws.com/"
 
-st.set_page_config(page_title="ESPN Results", page_icon="⚽", layout="centered")
-st.title("⚽ ESPN Results")
+st.set_page_config(page_title="Matchday", page_icon="⚽", layout="centered")
+st.title("⚽ Matchday")
 
 
 def call(params):
