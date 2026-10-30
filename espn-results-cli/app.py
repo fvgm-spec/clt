@@ -4,6 +4,60 @@ import streamlit as st
 
 API = "https://v114kxt4i7.execute-api.us-east-1.amazonaws.com/"
 
+LEAGUE_SLUGS = {
+    "Premier League":           "eng.1",
+    "Championship":             "eng.2",
+    "EFL Cup":                  "eng.league_cup",
+    "FA Cup":                   "eng.fa_cup",
+    "La Liga":                  "esp.1",
+    "La Liga 2":                "esp.2",
+    "Copa del Rey":             "esp.copa_del_rey",
+    "Bundesliga":               "ger.1",
+    "Bundesliga 2":             "ger.2",
+    "DFB Pokal":                "ger.dfb_pokal",
+    "Serie A":                  "ita.1",
+    "Serie B":                  "ita.2",
+    "Coppa Italia":             "ita.coppa_italia",
+    "Ligue 1":                  "fra.1",
+    "Ligue 2":                  "fra.2",
+    "Coupe de France":          "fra.coupe_de_france",
+    "Primeira Liga":            "por.1",
+    "Eredivisie":               "ned.1",
+    "Eerste Divisie":           "ned.2",
+    "Pro League":               "bel.1",
+    "Scottish Premiership":     "sco.1",
+    "Süper Lig":                "tur.1",
+    "Russian Premier":          "rus.1",
+    "Super League Greece":      "gre.1",
+    "Czech Liga":               "cze.1",
+    "Austrian Bundesliga":      "aut.1",
+    "Swiss Super League":       "sui.1",
+    "Danish Superliga":         "den.1",
+    "Allsvenskan":              "swe.1",
+    "Eliteserien":              "nor.1",
+    "Primera Argentina":        "arg.1",
+    "Primera B Argentina":      "arg.2",
+    "Brasileirao":              "bra.1",
+    "Serie B Brasil":           "bra.2",
+    "Primera Chile":            "chi.1",
+    "Primera Colombia":         "col.1",
+    "Primera Peru":             "per.1",
+    "Primera Uruguay":          "uru.1",
+    "Liga MX":                  "mex.1",
+    "Ascenso MX":               "mex.2",
+    "MLS":                      "usa.1",
+    "Primera Ecuador":          "ecu.1",
+    "Primera Venezuela":        "ven.1",
+    "Primera Bolivia":          "bol.1",
+    "Primera Paraguay":         "par.1",
+    "J1 League":                "jpn.1",
+    "Chinese Super League":     "chn.1",
+    "A-League":                 "aus.1",
+    "Champions League":         "UEFA.Champions_League",
+    "Europa League":            "UEFA.Europa_League",
+    "Conference League":        "UEFA.Europa_Conference_League",
+}
+
 st.set_page_config(page_title="Matchday", page_icon="⚽", layout="centered")
 st.title("⚽ Matchday")
 
@@ -252,79 +306,32 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(["Results", "Lineup", "Standings", "Playe
 
 with tab1:
     col1, col2 = st.columns(2)
-    date   = col1.text_input("Date (YYYYMMDD or YYYY-MM-DD)", placeholder="leave blank for today")
-    league = col2.text_input("League filter", placeholder="premier league, laliga …")
+    date         = col1.text_input("Date (YYYYMMDD or YYYY-MM-DD)", placeholder="leave blank for today")
+    league_label = col2.selectbox("League filter", ["(all)"] + list(LEAGUE_SLUGS.keys()), key="t1_league")
+    league       = "" if league_label == "(all)" else LEAGUE_SLUGS[league_label]
     if st.button("Fetch results"):
         with st.spinner("Fetching…"):
-            out = call({"action": "results", "date": date or "", "league": league or ""})
+            out = call({"action": "results", "date": date or "", "league": league})
         render_results(out)
 
 with tab2:
     col1, col2 = st.columns(2)
-    team  = col1.text_input("Team name", placeholder="Liverpool, Juventus …")
+    league_label2 = col1.selectbox("League", list(LEAGUE_SLUGS.keys()), key="t2_league")
+    league_slug2  = LEAGUE_SLUGS[league_label2]
+    teams_data = requests.get(
+        f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug2}/teams",
+        timeout=10
+    ).json()
+    team_names = [t["team"]["displayName"] for t in
+                  teams_data.get("sports", [{}])[0].get("leagues", [{}])[0].get("teams", [])]
+    team  = col1.selectbox("Team", team_names, key="t2_team") if team_names else col1.text_input("Team name")
     date2 = col2.text_input("Date (optional)", placeholder="leave blank for today", key="d2")
     if st.button("Fetch lineup"):
-        if not team:
-            st.warning("Enter a team name.")
-        else:
-            with st.spinner("Fetching…"):
-                out = call({"action": "lineup", "team": team, "date": date2 or ""})
-            render_lineup(out)
+        with st.spinner("Fetching…"):
+            out = call({"action": "lineup", "team": team, "date": date2 or ""})
+        render_lineup(out)
 
 with tab3:
-    LEAGUE_SLUGS = {
-        "Premier League":           "eng.1",
-        "Championship":             "eng.2",
-        "EFL Cup":                  "eng.league_cup",
-        "FA Cup":                   "eng.fa_cup",
-        "La Liga":                  "esp.1",
-        "La Liga 2":                "esp.2",
-        "Copa del Rey":             "esp.copa_del_rey",
-        "Bundesliga":               "ger.1",
-        "Bundesliga 2":             "ger.2",
-        "DFB Pokal":                "ger.dfb_pokal",
-        "Serie A":                  "ita.1",
-        "Serie B":                  "ita.2",
-        "Coppa Italia":             "ita.coppa_italia",
-        "Ligue 1":                  "fra.1",
-        "Ligue 2":                  "fra.2",
-        "Coupe de France":          "fra.coupe_de_france",
-        "Primeira Liga":            "por.1",
-        "Eredivisie":               "ned.1",
-        "Eerste Divisie":           "ned.2",
-        "Pro League":               "bel.1",
-        "Scottish Premiership":     "sco.1",
-        "Süper Lig":                "tur.1",
-        "Russian Premier":          "rus.1",
-        "Super League Greece":      "gre.1",
-        "Czech Liga":               "cze.1",
-        "Austrian Bundesliga":      "aut.1",
-        "Swiss Super League":       "sui.1",
-        "Danish Superliga":         "den.1",
-        "Allsvenskan":              "swe.1",
-        "Eliteserien":              "nor.1",
-        "Primera Argentina":        "arg.1",
-        "Primera B Argentina":      "arg.2",
-        "Brasileirao":              "bra.1",
-        "Serie B Brasil":           "bra.2",
-        "Primera Chile":            "chi.1",
-        "Primera Colombia":         "col.1",
-        "Primera Peru":             "per.1",
-        "Primera Uruguay":          "uru.1",
-        "Liga MX":                  "mex.1",
-        "Ascenso MX":               "mex.2",
-        "MLS":                      "usa.1",
-        "Primera Ecuador":          "ecu.1",
-        "Primera Venezuela":        "ven.1",
-        "Primera Bolivia":          "bol.1",
-        "Primera Paraguay":         "par.1",
-        "J1 League":                "jpn.1",
-        "Chinese Super League":     "chn.1",
-        "A-League":                 "aus.1",
-        "Champions League":         "UEFA.Champions_League",
-        "Europa League":            "UEFA.Europa_League",
-        "Conference League":        "UEFA.Europa_Conference_League",
-    }
     with st.form("standings_form"):
         league_label = st.selectbox("League", list(LEAGUE_SLUGS.keys()))
         submitted = st.form_submit_button("Fetch standings")
@@ -345,11 +352,16 @@ with tab4:
             render_player(out)
 
 with tab5:
-    team_t = st.text_input("Team tier lookup", placeholder="Leicester City …")
+    league_label5 = st.selectbox("League", list(LEAGUE_SLUGS.keys()), key="t5_league")
+    league_slug5  = LEAGUE_SLUGS[league_label5]
+    teams_data5 = requests.get(
+        f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug5}/teams",
+        timeout=10
+    ).json()
+    team_names5 = [t["team"]["displayName"] for t in
+                   teams_data5.get("sports", [{}])[0].get("leagues", [{}])[0].get("teams", [])]
+    team_t = st.selectbox("Team", team_names5, key="t5_team") if team_names5 else st.text_input("Team name")
     if st.button("Search team"):
-        if not team_t:
-            st.warning("Enter a team name.")
-        else:
-            with st.spinner("Fetching…"):
-                out = call({"action": "team", "name": team_t})
-            render_team(out)
+        with st.spinner("Fetching…"):
+            out = call({"action": "team", "name": team_t})
+        render_team(out)
