@@ -289,11 +289,11 @@ with tab3:
         "Primera Peru":         "per.1",
         "Primera Argentina":    "arg.1",
     }
-    league_label = st.selectbox("League", list(LEAGUE_SLUGS.keys()))
-    league_s = LEAGUE_SLUGS[league_label]
     with st.form("standings_form"):
+        league_label = st.selectbox("League", list(LEAGUE_SLUGS.keys()))
         submitted = st.form_submit_button("Fetch standings")
     if submitted:
+        league_s = LEAGUE_SLUGS[league_label]
         with st.spinner("Fetching…"):
             out = call({"action": "standings", "league": league_s})
         render_standings(out)
