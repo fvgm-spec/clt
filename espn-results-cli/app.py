@@ -283,7 +283,8 @@ def render_team(text):
     else:
         st.markdown(f"## 🏟️ {lines[0]}")
 
-    ICONS = {"Stadium": "🏟️", "Location": "📍", "Coords": "🗺️", "Maps": "🗺️", "GMaps": "📌"}
+    ICONS = {"Stadium": "🏟️", "Location": "📍", "Coords": "🗺️", "Maps": "🗺️", "GMaps": "📌",
+             "Last match": "⚽", "Next match": "📅", "Squad": "👥"}
     for line in lines[1:]:
         m = re.match(r"^\s+(.+?)\s*:\s*(.+)$", line)
         if not m:
@@ -296,6 +297,8 @@ def render_team(text):
             st.markdown(f"{icon} [Google Maps]({v})")
         elif k == "Coords":
             st.caption(f"{icon} {v}")
+        elif k == "Squad":
+            st.markdown(f"{icon} **Squad:** [View current squad]({v})")
         else:
             st.markdown(f"{icon} **{k}:** {v}")
 

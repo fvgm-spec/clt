@@ -532,6 +532,58 @@ def find_team_tier(team_query, league_hint=""):
     else:
         print("  Location : not found")
 
+    # last result + next match from schedule; squad URL from team detail
+    team_id = team.get("id", "")
+    try:
+        sched = fetch_json(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/teams/{team_id}/schedule")
+        events = sched.get("events", [])
+
+        completed = [e for e in events if e.get("competitions", [{}])[0].get("status", {}).get("type", {}).get("completed")]
+        if completed:
+            e = completed[-1]
+            comp = e.get("competitions", [{}])[0]
+            competitors = comp.get("competitors", [])
+            home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
+            away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[-1])
+            h_score = (home.get("score") or {}).get("displayValue", "?")
+            a_score = (away.get("score") or {}).get("displayValue", "?")
+            try:
+                dt = datetime.fromisoformat(e["date"].replace("Z", "+00:00")).astimezone(DISPLAY_TIMEZONE)
+                date_fmt = dt.strftime("%a %d %b %Y")
+            except Exception:
+                date_fmt = e.get("date", "")[:10]
+            print(f"  Last match : {away['team']['displayName']} {a_score} - {h_score} {home['team']['displayName']}  ({date_fmt})")
+    except Exception:
+        pass
+
+    try:
+        tdata = fetch_json(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/teams/{team_id}")
+        tteam = tdata.get("team", {})
+
+        # next match from nextEvent
+        for event in tteam.get("nextEvent", []):
+            comp = event.get("competitions", [{}])[0]
+            competitors = comp.get("competitors", [])
+            home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
+            away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[-1])
+            try:
+                dt = datetime.fromisoformat(event["date"].replace("Z", "+00:00")).astimezone(DISPLAY_TIMEZONE)
+                date_fmt = dt.strftime("%a %d %b %Y, %H:%M")
+            except Exception:
+                date_fmt = event.get("date", "")[:10]
+            league_name = event.get("league", {}).get("name", "")
+            suffix = f"  ({league_name})" if league_name else ""
+            print(f"  Next match : {away['team']['displayName']} @ {home['team']['displayName']}  ({date_fmt}){suffix}")
+            break
+
+        # squad URL
+        for link in tteam.get("links", []):
+            if "squad" in link.get("rel", []) and "desktop" in link.get("rel", []):
+                print(f"  Squad      : {link['href']}")
+                break
+    except Exception:
+        pass
+
 
 FALLBACK_LEAGUES = {
     "eng": ["eng.1", "eng.2", "eng.league_cup", "eng.fa_cup"],
