@@ -171,11 +171,11 @@ def render_standings(text):
             continue
         if re.match(r"^\s+#\s+Team", line):
             continue
-        m = re.match(r"^\s*(\d+)\s{2,}(.+?)\s{2,}(\d+)\s+(\d+)\s+([+-]?\d+)\s+(\d+).*?(?:\[(.+)\])?$", line)
+        m = re.match(r"^\s*(\d+)\s{2,}(.+?)\s{2,}(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([+-]?\d+)\s+(\d+).*?(?:\[(.+)\])?$", line)
         if m:
             rows.append({"#": int(m.group(1)), "Team": m.group(2).strip(),
-                         "J": m.group(3), "P": m.group(4), "DIF": m.group(5),
-                         "PTS": m.group(6), "Zone": (m.group(7) or "").strip()})
+                         "J": m.group(3), "P": m.group(10), "DIF": m.group(9),
+                         "PTS": m.group(10), "Zone": (m.group(11) or "").strip()})
 
     if not rows:
         st.code(text); return
