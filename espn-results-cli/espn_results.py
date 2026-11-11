@@ -491,7 +491,7 @@ def _nominatim_search(stadium_name, league_slug=""):
         return []
 
 
-def find_team_tier(team_query):
+def find_team_tier(team_query, league_hint=""):
     items = search_espn(team_query, "team")
     if not items:
         print(f"No team found for '{team_query}'.")
@@ -506,12 +506,13 @@ def find_team_tier(team_query):
         "fra.1": "Ligue 1 (1st tier)",          "fra.2": "Ligue 2 (2nd tier)",
         "arg.1": "Primera División Argentina",  "chi.1": "Primera División Chile",
         "col.1": "Primera A Colombia",          "per.1": "Liga 1 Perú",
-        "UEFA.Champions_League": "UEFA Champions League",
-        "UEFA.Europa_League": "UEFA Europa League",
+        "uefa.champions": "UEFA Champions League",
+        "uefa.europa": "UEFA Europa League",
+        "uefa.europa.conf": "UEFA Conference League",
     }
 
     team = items[0]
-    slug = team.get("defaultLeagueSlug", "")
+    slug = league_hint or team.get("defaultLeagueSlug", "")
     league = LEAGUE_NAMES.get(slug, slug or "Unknown")
     print(f"{team['displayName']}  →  {league}")
 

@@ -80,7 +80,8 @@ def lambda_handler(event, context):
         name = qs.get("name")
         if not name:
             return _err("'name' parameter required")
-        out, err = _capture(espn.find_team_tier, name)
+        league = qs.get("league", "")
+        out, err = _capture(espn.find_team_tier, name, league)
         return _ok(out) if not err else _err(err)
 
     if action == "scrape_stadiums":

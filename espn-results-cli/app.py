@@ -363,5 +363,5 @@ with tab5:
     team_t = st.selectbox("Team", team_names5, key="t5_team") if team_names5 else st.text_input("Team name")
     if st.button("Search team"):
         with st.spinner("Fetching…"):
-            out = call({"action": "team", "name": team_t})
+            out = call({"action": "team", "name": team_t, "league": league_slug5})
         render_team(out)
