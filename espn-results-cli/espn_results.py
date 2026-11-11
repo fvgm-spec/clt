@@ -64,10 +64,10 @@ LEAGUE_SLUGS = {
     "bundesliga":   "ger.1",
     "serie a":      "ita.1",
     "ligue 1":      "fra.1",
-    "champions":    "UEFA.Champions_League",
-    "champions league": "UEFA.Champions_League",
-    "europa":       "UEFA.Europa_League",
-    "conference":   "UEFA.Europa_Conference_League",
+    "champions":    "uefa.champions",
+    "champions league": "uefa.champions",
+    "europa":       "uefa.europa",
+    "conference":   "uefa.europa.conf",
     "libertadores": "CONMEBOL.Libertadores",
     "sudamericana": "CONMEBOL.Sudamericana",
     "primera chile": "chi.1",
@@ -240,33 +240,34 @@ def print_scoreboard(scoreboard, date, source_url, league_filter=None):
 
 
 def fetch_standings(league):
-    url = STANDINGS_URL.format(league=league)
-    html, source_url = fetch_html_url(url)
-    state = extract_state(html)
+    url = STANDINGS_API_URL.format(league=league)
     try:
-        data = state["page"]["content"]["standings"]
-        headers = data["groups"]["headers"]
-        groups  = data["groups"]["groups"]
-    except KeyError as exc:
-        raise RuntimeError(f"Could not find standings data: {exc}") from exc
+        data = fetch_json(url)
+    except RuntimeError as exc:
+        raise RuntimeError(f"Standings not available for '{league}': {exc}") from exc
 
-    col_keys = list(headers.keys())
-    col_abbr = [headers[k]["a"] for k in col_keys]
+    league_name = data.get("name") or data.get("abbreviation") or league
+    print(f"Standings: {league_name}")
+    print()
 
-    print(f"Standings: {data.get('leagueName', league)}")
-    print(f"{url}\n")
+    STAT_COLS = ["gamesPlayed", "wins", "ties", "losses", "pointsFor", "pointsAgainst", "pointDifferential", "points"]
+    STAT_HDR  = ["GP", "W",  "D",  "L",  "GF",  "GA",  "GD",  "Pts"]
 
-    for group in groups:
-        print(group.get("name", ""))
-        print("-" * 60)
-        # header row
-        print(f"{'#':>3}  {'Team':<28} " + "  ".join(f"{a:>4}" for a in col_abbr[:8]))
-        print("-" * 60)
-        for i, entry in enumerate(group.get("standings", []), 1):
-            team  = entry["team"]["shortDisplayName"]
-            stats = entry.get("stats", [])
+    children = data.get("children") or [data]
+    for group in children:
+        group_name = group.get("name", "")
+        entries = group.get("standings", {}).get("entries", [])
+        if not entries:
+            continue
+        if group_name:
+            print(group_name)
+        print(f"{'#':>3}  {'Team':<28} " + "  ".join(f"{h:>4}" for h in STAT_HDR))
+        print("-" * 70)
+        for i, entry in enumerate(entries, 1):
+            team  = entry.get("team", {}).get("shortDisplayName") or entry.get("team", {}).get("displayName", "?")
+            stats = {s["name"]: s["displayValue"] for s in entry.get("stats", [])}
             note  = entry.get("note", {}).get("description", "")
-            row   = "  ".join(f"{(stats[j] if j < len(stats) else ''):>4}" for j in range(8))
+            row   = "  ".join(f"{stats.get(k, ''):>4}" for k in STAT_COLS)
             note_str = f"  [{note}]" if note else ""
             print(f"{i:>3}  {team:<28} {row}{note_str}")
         print()
@@ -538,7 +539,7 @@ FALLBACK_LEAGUES = {
     "jpn": ["jpn.1"],
     "chn": ["chn.1"],
     "aus": ["aus.1"],
-    "UEFA": ["UEFA.Champions_League", "UEFA.Europa_League", "UEFA.Europa_Conference_League"],
+    "UEFA": ["uefa.champions", "uefa.europa", "uefa.europa.conf"],
 }
 
 
