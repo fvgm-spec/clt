@@ -53,9 +53,9 @@ LEAGUE_SLUGS = {
     "J1 League":                "jpn.1",
     "Chinese Super League":     "chn.1",
     "A-League":                 "aus.1",
-    "Champions League":         "UEFA.Champions_League",
-    "Europa League":            "UEFA.Europa_League",
-    "Conference League":        "UEFA.Europa_Conference_League",
+    "Champions League":         "uefa.champions",
+    "Europa League":            "uefa.europa",
+    "Conference League":        "uefa.europa.conf",
 }
 
 st.set_page_config(page_title="Matchday", page_icon="⚽", layout="centered")
