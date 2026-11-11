@@ -414,7 +414,27 @@ def get_team_location(team_name, league_slug="", team_id=None):
             if results:
                 return results[0]
 
-    cc = LEAGUE_COUNTRY.get(league_slug.split(".")[0])
+    # Try ESPN team API for venue — reliable for UEFA/international teams where
+    # LEAGUE_COUNTRY has no country code and Nominatim would guess wrong
+    espn_venue = None
+    espn_cc = None
+    if team_id and league_slug:
+        try:
+            data = fetch_json(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_slug}/teams/{team_id}")
+            for event in data.get("team", {}).get("nextEvent", []):
+                for comp in event.get("competitions", []):
+                    for competitor in comp.get("competitors", []):
+                        if competitor.get("homeAway") == "home" and str(competitor.get("id")) == str(team_id):
+                            venue = comp.get("venue", {})
+                            espn_venue = venue.get("fullName")
+                            espn_cc = venue.get("address", {}).get("country", "")
+                            break
+                if espn_venue:
+                    break
+        except Exception:
+            pass
+
+    cc = espn_cc or LEAGUE_COUNTRY.get(league_slug.split(".")[0])
 
     def nominatim(query):
         params = {"q": query, "format": "json", "limit": 10, "addressdetails": 1}
@@ -432,6 +452,13 @@ def get_team_location(team_name, league_slug="", team_id=None):
             if any(t in r.get("type", "") for t in ("stadium", "sports", "ground", "pitch", "construction")):
                 return r
         return results[0] if results else None
+
+    # use ESPN venue name directly if found — most accurate
+    if espn_venue:
+        r = best(nominatim(espn_venue))
+        if r:
+            return r
+        _time.sleep(0.5)
 
     # check alias first
     alias = STADIUM_ALIASES.get(team_name.lower())
